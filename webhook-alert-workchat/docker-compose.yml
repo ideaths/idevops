@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  flask-app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - WORKCHAT_API_URL=http://10.0.72.130:8081/v1/messageSupport
+      - THREAD_ID=8868114339906677
+      - USER_LIST=ducdt1
+      - PRIORITY=1

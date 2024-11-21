@@ -1,0 +1,18 @@
+<!-- alert_template.html -->
+<html>
+  <body>
+    <p><b>{{ alert_name }}</b></p>
+    {% if summary %}
+      <p><i>Summary: </i>{{ summary }}</p>
+    {% endif %}
+    {% if description %}
+      <p><i>Description: </i>{{ description }}</p>
+    {% endif %}
+    <p><i>Labels:</i></p>
+    <ul>
+      {% for key, value in labels.items() %}
+        <li><i>{{ key }}</i>: <code>{{ value }}</code></li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>
