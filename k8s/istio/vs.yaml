@@ -1,0 +1,39 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: app-fe
+  namespace: demo
+spec:
+  gateways:
+  - istio-system/gateway-dmz
+  hosts:
+  - app-fe.demo.vn
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: app-fe
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: app-be
+  namespace: demo
+spec:
+  gateways:
+  - istio-system/gateway-dmz
+  hosts:
+  - app-be.demo.vn
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: app-fe
+        port:
+          number: 80

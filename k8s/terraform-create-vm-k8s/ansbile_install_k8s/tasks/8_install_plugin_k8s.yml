@@ -1,0 +1,79 @@
+---
+- name: Add Helm repository
+  shell: |
+    helm repo add cilium https://helm.cilium.io/
+    helm repo add signoz https://charts.signoz.io/
+    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
+    helm repo add jetstack https://charts.jetstack.io
+    helm repo update
+
+- name: Install Cilium CNI
+  shell: |
+    SEED=$(head -c12 /dev/urandom | base64 -w0) && \
+    helm upgrade -i cilium cilium/cilium --version 1.16.3 \
+      --namespace kube-system \
+      --set kubeProxyReplacement=true \
+      --set k8sServiceHost={{ vip }} \
+      --set k8sServicePort=6443 \
+      --reuse-values \
+      --set hubble.relay.enabled=true \
+      --set hubble.ui.enabled=true \
+      --set loadBalancer.algorithm=maglev \
+      --set maglev.tableSize=131071 \
+      --set maglev.hashSeed=$SEED
+
+
+# - name: mkdir folder ceph
+#   command: mkdir -p /root/rook-ceph
+    
+# - name: copy file yaml ceph
+#   template:
+#     src: "{{ item }}"
+#     dest: "/root/rook-ceph/{{ item | basename | regex_replace('\\.js$', '') }}"
+#     owner: root
+#     group: root
+#     mode: '0644'
+#   with_fileglob:
+#     - "templates/rook-ceph/*.js"
+
+# - name: Install ceph
+#   command: kubectl apply -f /root/rook-ceph/
+
+
+- name: Install Ingress-nginx
+  shell: |
+    helm upgrade -i ingress-nginx ingress-nginx \
+      --repo https://kubernetes.github.io/ingress-nginx \
+      --namespace ingress-nginx --create-namespace \
+      --set controller.metrics.enabled=true \
+      --set-string controller.podAnnotations."prometheus\.io/scrape"="true" \
+      --set-string controller.podAnnotations."prometheus\.io/port"="10254" --create-namespace
+  ignore_errors: yes
+  retries: 3
+  delay: 30
+
+# - name: Install Signoz
+#   shell: | 
+#     DEFAULT_STORAGE_CLASS=$(kubectl get storageclass -o=jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
+#     kubectl patch storageclass "$DEFAULT_STORAGE_CLASS" -p '{"allowVolumeExpansion": true}'
+#     helm --namespace platform upgrade -i signoz signoz/signoz --create-namespace
+#   ignore_errors: yes
+
+# - name: Install kube-prometheus-stack
+#   shell: helm repo update && helm upgrade -i prometheus prometheus-community/kube-prometheus-stack -n monitor --create-namespace
+
+- name: Upload Metric Server YAML file
+  template:
+    src: metric-server.yaml.j2 
+    dest: /opt/metric-server.yaml
+
+- name: Install Metric Server
+  command: kubectl apply -f /opt/metric-server.yaml
+
+- name: Install Rancher
+  shell: |
+    kubectl create namespace cattle-system
+    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.1/cert-manager.crds.yaml
+    helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.16.1
+    helm upgrade -i rancher rancher-stable/rancher --namespace cattle-system --set letsEncrypt.email="iducok@idevops.io.vn" --set hostname=rancher.idevops.io.vn --set ingress.ingressClassName=nginx --set global.cattle.psp.enabled=false --set ingress.tls.source=rancher --set ingress.tls.source=letsEncrypt --set ingress.tls.source=secret --set bootstrapPassword=admin

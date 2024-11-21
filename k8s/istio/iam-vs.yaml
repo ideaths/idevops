@@ -1,0 +1,39 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: iam
+  namespace: demo
+spec:
+  gateways:
+  - istio-system/gateway-dmz
+  hosts:
+  - iam.demo.vn
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: iam.demo.svc.cluster.local
+        port:
+          number: 9443
+--- 
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: iam
+  namespace: demo
+spec:
+  mtls:
+    mode: DISABLE
+--- 
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: iam
+  namespace: demo
+spec:
+  host: iam.demo.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: SIMPLE

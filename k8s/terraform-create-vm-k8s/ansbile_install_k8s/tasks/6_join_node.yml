@@ -1,0 +1,44 @@
+---
+- name: Check if node has already joined the cluster
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: node_joined
+
+- name: Get the join command for the master node
+  command: kubeadm token create --print-join-command
+  when: "'master' in group_names and inventory_hostname == groups['master'][0]"
+  register: join_command
+
+- name: Upload certificates to Kubernetes master and log to file
+  shell: kubeadm init phase upload-certs --upload-certs > /root/certificate_key.log
+  when: "'master' in group_names and inventory_hostname == groups['master'][0]"
+
+- name: Read last line from the log file
+  command: tail -n 1 /root/certificate_key.log
+  when: "'master' in group_names and inventory_hostname == groups['master'][0]"
+  register: certificate_key
+
+- name: Set the certificate_key and join_command globally for all nodes
+  set_fact:
+    global_certificate_key: "{{ certificate_key.stdout }}"
+    global_join_command: "{{ join_command.stdout }}"
+  when: "'master' in group_names and inventory_hostname == groups['master'][0]"
+
+- name: Share certificate_key and join_command with all nodes
+  set_fact:
+    global_join_command: "{{ hostvars[groups['master'][0]].global_join_command }}"
+  when: "'worker' in group_names and not node_joined.stat.exists"
+
+- name: Share certificate_key and join_command with all nodes
+  set_fact:
+    global_certificate_key: "{{ hostvars[groups['master'][0]].global_certificate_key }}"
+    global_join_command: "{{ hostvars[groups['master'][0]].global_join_command }}"
+  when: "'master' in group_names and inventory_hostname != groups['master'][0] and not node_joined.stat.exists"
+
+- name: Join other master nodes to Kubernetes cluster
+  command: "{{ global_join_command }} --control-plane --certificate-key {{ global_certificate_key }}"
+  when: "'master' in group_names and inventory_hostname != groups['master'][0] and not node_joined.stat.exists"
+
+- name: Join worker nodes to Kubernetes cluster
+  command: "{{ global_join_command }}"
+  when: "'worker' in group_names and not node_joined.stat.exists"
