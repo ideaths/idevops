@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iam-esb-db-cm
+  namespace: demo
+data:
+  USER_SSO: sso
+  PASS_SSO: xxxxxxxx
+  APIM_DB_USER: apim
+  APIM_DB_PASS: xxxxxxxx
+  DMDC_DB_USER: dmdc
+  DMDC_DB_PASSWORD: xxxxxxxx
+  mysqld.cnf: |
+    [mysqld]
+    bind-address = 0.0.0.0
+    default-storage-engine=INNODB
+    sql-mode="NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
+    log-output=FILE
+    # general-log=1
+    # general_log_file="/var/log/mysql/mysql.log"
+    # slow-query-log=1
+    # slow_query_log_file="/var/log/mysql/mysql-slow.log"
+    # long_query_time=10
+    # log-error="/var/log/mysql/mysql.err"
+    lower_case_table_names=1
+    max_connections=4000
+    table_open_cache=2000
+    tmp_table_size=626M
+    thread_cache_size=10
+    myisam_max_sort_file_size=100G
+    myisam_sort_buffer_size=2G
+    key_buffer_size=8M
+    read_buffer_size=64K
+    read_rnd_buffer_size=256K
+    innodb_flush_log_at_trx_commit=1
+    innodb_log_buffer_size=1M
+    innodb_buffer_pool_size=8M
+    innodb_log_file_size=48M
+    innodb_thread_concurrency=33
+    innodb_autoextend_increment=64
+    innodb_buffer_pool_instances=8
+    innodb_concurrency_tickets=5000
+    innodb_old_blocks_time=1000
+    innodb_stats_on_metadata=0
+    innodb_file_per_table=1
+    innodb_checksum_algorithm=0
+    back_log=80
+    flush_time=0
+    join_buffer_size=256K
+    max_allowed_packet=256M
+    max_connect_errors=100
+    open_files_limit=4161
+    sort_buffer_size=256K
+    table_definition_cache=1400
+    binlog_row_event_max_size=8K
+    sync_master_info=10000
+    sync_relay_log=10000
+    sync_relay_log_info=10000
