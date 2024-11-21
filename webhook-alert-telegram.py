@@ -18,19 +18,24 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessag
 
 # Hàm gửi tin nhắn Telegram
 def send_to_telegram(message):
-    logger.info(f"Preparing to send message to Telegram. API URL: {TELEGRAM_API_URL}")
-    logger.debug(f"Message content: {message}")
-    logger.debug(f"Chat ID: {TELEGRAM_CHAT_ID}")
+    logger.info("Preparing to send message to Telegram.")
+    logger.debug(f"Telegram API URL: {TELEGRAM_API_URL}")
+    logger.debug(f"Telegram Chat ID: {TELEGRAM_CHAT_ID}")
+    logger.debug(f"Message content to send: {message}")
 
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
         "parse_mode": "HTML"
     }
+    
+    # Log gói tin gửi đi
+    logger.info(f"Payload gửi tới Telegram: {payload}")
+
     try:
         response = requests.post(TELEGRAM_API_URL, json=payload)
         logger.info(f"Request sent to Telegram API. Status code: {response.status_code}")
-        logger.debug(f"Response text: {response.text}")
+        logger.debug(f"Response content: {response.text}")
 
         if response.status_code == 200:
             logger.info("Message sent to Telegram successfully.")
@@ -72,8 +77,13 @@ def format_alerts(alerts):
 def alertmanager_webhook():
     try:
         logger.info("Received request on /alertmanager endpoint.")
+        
+        # Ghi log gói tin nhận được
+        raw_data = request.get_data(as_text=True)
+        logger.info(f"Gói tin nhận được từ client: {raw_data}")
+        
         data = request.json  # Nhận payload JSON từ Alertmanager
-        logger.debug(f"Request JSON payload: {data}")
+        logger.debug(f"Parsed JSON payload: {data}")
 
         if not data:
             logger.warning("Received empty or invalid JSON payload.")
@@ -113,16 +123,3 @@ def alertmanager_webhook():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
-
-
-
-
-# curl -X POST "https://api.telegram.org/bot/sendMessage" \
-# -H "Content-Type: application/json" \
-# -d '{"chat_id": "", "text": "Test message from Grafana"}'
-
-
-# curl -X POST "http://10.6.6.129:5000/alertmanager" \
-# -H "Content-Type: application/json" \
-# -d '{"alerts":[{"status":"firing","labels":{"alertname":"TestAlert"},"annotations":{"summary":"Test summary"}}]}'
