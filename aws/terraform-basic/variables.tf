@@ -1,6 +1,0 @@
-variable "env" {
-  
-}
-variable "region" {
-  
-}

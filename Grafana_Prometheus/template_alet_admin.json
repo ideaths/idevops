@@ -1,0 +1,110 @@
+{
+  "template_files": {
+    "Email_template": "{{ define \"slack_message\" }}\n  {{ if gt (len .Alerts.Firing) 0 }}\n    {{ range .Alerts.Firing }} {{ template \"slack_alert_firing\" .}} {{ end }} {{ end }}\n  {{ if gt (len .Alerts.Resolved) 0 }}\n    {{ range .Alerts.Resolved }} {{ template \"slack_alert_resolved\" .}} {{ end }} {{ end }}\n{{ end }}\n\n{{ define \"slack_alert_firing\" }}\n  *{{ .Annotations.summary }}*\n  Server: *{{ .Labels.instance }}*\n  *{{ .Annotations.description }}*\n {{ end }}\n\n{{ define \"slack_alert_resolved\" }}\n  *{{ .Labels.instance }}*\n  *{{ .Annotations.description }}*\n  \n{{ end }}",
+    "Telegram_template": "{{ define \"telegram_message\" }}\n  {{ if gt (len .Alerts.Firing) 0 }}\n  <b>🔥 {{ len .Alerts.Firing }} alert(s) firing:</b>\n    {{ range .Alerts.Firing }} {{ template \"telegram_alert_firing\" .}} {{ end }} {{ end }}\n  {{ if gt (len .Alerts.Resolved) 0 }}\n  <b>✅ {{ len .Alerts.Resolved }} alert(s) resolved:</b>\n    {{ range .Alerts.Resolved }} {{ template \"telegram_alert_resolved\" .}} {{ end }} {{ end }}\n{{ end }}\n\n{{ define \"telegram_alert_firing\" }}\n  {{ .Annotations.summary }}\n  Server: <b>{{ .Labels.instance }}</b>\n  <b>{{ .Annotations.description }}</b>\n  {{ end }}\n\n  {{ define \"telegram_alert_resolved\" }}\n  <b>{{ .Labels.instance }}</b>\n  <b>{{ .Annotations.description }}</b>\n  {{ end }}",
+    "Title_email": "{{ define \"slack_title\" }}\n  {{ if gt (len .Alerts.Firing) 0 }}\n  🔥 {{ len .Alerts.Firing }} Cảnh báo Hệ thống\n  {{ end }}\n  {{ if gt (len .Alerts.Resolved) 0 }}\n  ✅ {{ len .Alerts.Resolved }} alert(s) resolved\n  {{ end }}\n{{ end }}"
+  },
+  "template_file_provenances": {},
+  "alertmanager_config": {
+    "route": {
+      "receiver": "Notification",
+      "group_by": [
+        "grafana_folder",
+        "alertname"
+      ],
+      "routes": [
+        {
+          "receiver": "Notification",
+          "object_matchers": [
+            [
+              "alerts",
+              "=",
+              "memory"
+            ]
+          ],
+          "group_wait": "30s",
+          "group_interval": "2m",
+          "repeat_interval": "1h"
+        },
+        {
+          "receiver": "Notification",
+          "object_matchers": [
+            [
+              "alerts",
+              "=",
+              "disk"
+            ]
+          ],
+          "group_wait": "30s",
+          "group_interval": "2m",
+          "repeat_interval": "1h"
+        },
+        {
+          "receiver": "Notification",
+          "object_matchers": [
+            [
+              "alerts",
+              "=",
+              "cpu"
+            ]
+          ],
+          "group_wait": "30s",
+          "group_interval": "2m",
+          "repeat_interval": "1h"
+        },
+        {
+          "receiver": "Notification",
+          "object_matchers": [
+            [
+              "alerts",
+              "=",
+              "server"
+            ]
+          ],
+          "group_wait": "30s",
+          "group_interval": "2m",
+          "repeat_interval": "1h"
+        }
+      ]
+    },
+    "templates": [
+      "Email_template",
+      "Title_email",
+      "Telegram_template"
+    ],
+    "receivers": [
+      {
+        "name": "Notification",
+        "grafana_managed_receiver_configs": [
+          {
+            "uid": "a01ece5b-e05e-4aeb-b69c-8e1f276746ed",
+            "name": "Notification",
+            "type": "email",
+            "disableResolveMessage": true,
+            "settings": {
+              "addresses": "duc.doan@icomm-group.com,tien.nguyen@icomm-group.com, long.nguyen@icomm.vn",
+              "singleEmail": false,
+              "subject": "{{ template \"slack_title\" . }}",
+              "message": "{{ template \"slack_message\" . }}"
+            },
+            "secureFields": {}
+          },
+          {
+            "uid": "e9bfb5e0-5d6a-4db5-8aa1-7b813951db4e",
+            "name": "Notification",
+            "type": "telegram",
+            "disableResolveMessage": true,
+            "settings": {
+              "chatid": "-4095137656",
+              "disable_notification": false,
+              "message": "{{ template \"telegram_message\" . }}"
+            },
+            "secureFields": {
+              "bottoken": true
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,139 @@
+Dưới đây là tổng hợp lại các kịch bản alert mà bạn đã yêu cầu, bao gồm các trường hợp phổ biến trong quản lý Pod trong Kubernetes bằng Prometheus Alert Rules:
+
+### 1. Pod vào trạng thái CrashLoopBackOff
+
+```yaml
+- alert: PodCrashLoopBackOff
+  expr: kube_pod_status_phase{phase="Failed"} == 1
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is in CrashLoopBackOff"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} is in CrashLoopBackOff state."
+```
+
+### 2. Pod bị OOMKilled (Out of Memory)
+
+```yaml
+- alert: PodOOMKilled
+  expr: kube_pod_status_reason{reason="OOMKilled"} == 1
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been OOM Killed"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} has been terminated due to out of memory."
+```
+
+### 3. Pod vào trạng thái ImagePullBackOff
+
+```yaml
+- alert: PodImagePullBackOff
+  expr: kube_pod_status_phase{phase="Pending"} * on(pod) group_left(node) kube_pod_status_reason{reason="ImagePullBackOff"} == 1
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is in ImagePullBackOff"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} is stuck in ImagePullBackOff state."
+```
+
+### 4. Pod Pending quá lâu
+
+```yaml
+- alert: PodPendingTooLong
+  expr: kube_pod_status_phase{phase="Pending"} == 1
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is pending for too long"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in Pending state for more than 10 minutes."
+```
+
+### 5. Pod không có Node sẵn để scheduling
+
+```yaml
+- alert: PodUnschedulable
+  expr: kube_pod_spec_nodename == ""
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is unschedulable"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} cannot be scheduled to any node."
+```
+
+### 6. Yêu cầu tài nguyên của Pod vượt quá tài nguyên của Node
+
+```yaml
+- alert: PodResourceLimitExceeded
+  expr: kube_pod_container_resource_requests_cpu_cores > node:node_num_cpu_cores * 0.8
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} resource request exceeds available Node CPU"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} resource request exceeds the available CPU on the Node."
+```
+
+### 7. Container trong Pod vào trạng thái CrashLoopBackOff
+
+```yaml
+- alert: ContainerCrashLoopBackOff
+  expr: rate(container_last_seen{reason="CrashLoopBackOff"}[5m]) > 0
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is in CrashLoopBackOff"
+    description: "The container {{ $labels.container }} in Pod {{ $labels.namespace }}/{{ $labels.pod }} is in CrashLoopBackOff state."
+```
+
+### 8. Pod không thể truy cập từ mạng
+
+```yaml
+- alert: PodNetworkUnavailable
+  expr: up == 0
+  for: 1m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is not reachable from the network"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} is not reachable from the network."
+```
+
+### 9. Pod reset quá nhiều lần trong 10 phút
+
+```yaml
+- alert: PodRestartHigh
+  expr: increase(kube_pod_container_status_restarts_total{job="kube-state-metrics"}[10m]) > 10
+  for: 10m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted more than 10 times in the last 10 minutes"
+    description: "The Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted more than 10 times in the last 10 minutes. Current restart count: {{ printf \"%0.0f\" (increase(kube_pod_container_status_restarts_total{job=\"kube-state-metrics\"}[10m])) }}."
+```
+
+### 10. Cảnh báo khi số lượng Replica của HPA vượt quá giới hạn
+
+```yaml
+- alert: HPAReplicaLimitReached
+  expr: kube_hpa_status_current_replicas > kube_hpa_spec_max_replicas
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "HPA {{ $labels.hpa }} in namespace {{ $labels.namespace }} has reached max replicas limit"
+    description: "The Horizontal Pod Autoscaler (HPA) {{ $labels.hpa }} in namespace {{ $labels.namespace }} has reached its max replicas limit of {{ $labels.max_replicas }}."
+```
+
+### Hướng dẫn sử dụng:
+
+- Các ví dụ trên sử dụng PromQL để định nghĩa các biểu thức để phát hiện các trạng thái lỗi của Pod và giám sát các chỉ số quan trọng trong Kubernetes.
+- Thời gian `for` trong mỗi cảnh báo được thiết lập để xác định bao lâu điều kiện phải đúng trước khi cảnh báo được kích hoạt.
+- Cấu hình `labels` và `annotations` để cung cấp thông tin mô tả chi tiết về cảnh báo khi nó được kích hoạt.
+
+Việc triển khai các cảnh báo này sẽ giúp bạn giám sát và quản lý hiệu quả hơn các Pod và tài nguyên liên quan trong môi trường Kubernetes, từ đó cải thiện tính ổn định và sự tin cậy của hệ thống.
