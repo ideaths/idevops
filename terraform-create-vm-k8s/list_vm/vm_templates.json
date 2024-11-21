@@ -64,5 +64,16 @@
     "ipv4_address": "10.6.6.16",
     "ipv4_netmask": 24,
     "ipv4_gateway": "10.6.6.2"
+  },  
+  "k8s-monitor": {
+    "vm_type": "template-redhat8",
+    "guest_id": "rhel8_64Guest",
+    "num_cpus": 4,
+    "memory": 8192,
+    "host_name": "k8s-monitor",
+    "domain": "localdomain",
+    "ipv4_address": "10.6.6.17",
+    "ipv4_netmask": 24,
+    "ipv4_gateway": "10.6.6.2"
   }
 }

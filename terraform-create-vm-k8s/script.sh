@@ -5,5 +5,3 @@ terraform plan -var "GOVC_URL=vcenter.idevops.io.vn" -var "GOVC_USERNAME=adminis
 rm -rf /root/.ssh/known_hosts && ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansbile_install_k8s/inventory.ini ansbile_install_k8s/install-kube.yml
 
 ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansbile_install_k8s/inventory.ini ansbile_install_k8s/Reset-kube.yml
-
-
