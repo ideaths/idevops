@@ -1,0 +1,9 @@
+---
+# Kubernetes configuration
+kube_version: "v1.30"
+vip: "10.6.6.10"  # Virtual IP for Keepalived
+
+# SSH configuration
+ansible_user: root
+ansible_ssh_pass: 1
+#ansible_password: 1

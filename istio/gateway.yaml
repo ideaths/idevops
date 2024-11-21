@@ -1,0 +1,32 @@
+kind: Gateway
+apiVersion: networking.istio.io/v1beta1
+metadata:
+  name: gateway-dmz
+  namespace: istio-system
+spec:
+  servers:
+    - port:
+        number: 80
+        protocol: HTTP
+        name: http
+      hosts:
+        - '*.demo.vn'
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        protocol: HTTPS
+        name: https
+      hosts:
+        - '*.demo.vn'
+      tls:
+        mode: SIMPLE
+        credentialName: demo
+    - port: 
+        number: 3306
+        protocol: TCP
+        name: mysql-tcp
+      hosts:
+        - "*" 
+  selector:
+    istio: ingressgateway

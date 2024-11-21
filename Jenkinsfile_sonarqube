@@ -1,0 +1,90 @@
+
+node {
+  checkout scm
+ stage('SonarQube Analysis') {
+      def scannerHome = tool 'SonarQube';
+      withSonarQubeEnv() {
+         sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=retail-adetector-project"
+  }
+    }
+  stage("Quality Gate"){
+          timeout(time: 1, unit: 'HOURS') {
+              def qg = waitForQualityGate()
+              if (qg.status != 'OK') {
+                  error "Pipeline aborted due to quality gate failure: ${qg.status}"
+              }
+          }     
+}
+}
+
+pipeline {
+      agent {
+    label "172.16.10.58"
+  }
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '5'))
+  }
+  environment {
+    apiTag2 = sh(returnStdout: true, script: "git tag --sort version:refname | tail -1").trim()
+    apiTag1 = sh(returnStdout: true, script: "basename $GIT_BRANCH").trim()
+  }
+  stages {
+    stage('Build') {
+      steps {
+        sh "printenv"
+        echo "Current Tag version: apiTag1=${env.apiTag1} "
+        echo "Bigest Tag version: apiTag2=${env.apiTag2} origin=$GIT_BRANCH"
+        script {
+          if (env.TAG_NAME) {
+            def customImage = docker.build("${env.registry_host}:${env.apiTag2}")
+          } else {
+            def customImage = docker.build("${env.registry_host}:latest")
+          }
+        }
+
+      }
+    }
+    stage('Push') {
+      steps {
+        script {
+          if (env.TAG_NAME) {
+            docker.withRegistry('http://reg.icomm.vn', 'reg.icomm.vn') {
+        def customImage = docker.build("${env.registry_host}:${env.apiTag2}")
+        /* Push the container to the custom Registry */
+        customImage.push()
+          }
+          } else {
+            docker.withRegistry('http://reg.icomm.vn', 'reg.icomm.vn') {
+        def customImage = docker.build("${env.registry_host}:latest")
+        /* Push the container to the custom Registry */
+        customImage.push()
+          }
+        }
+        }
+      }
+    }
+    stage('Deploy') {
+      steps {
+        script {
+          if (env.TAG_NAME) {
+            echo "Deploying Tag version: ${env.apiTag2} "
+            sh "chmod +x prod_deploy.sh"
+            sh "sh prod_deploy.sh -f ./helm/values.yaml -t ${env.apiTag2} "
+          } else {
+            echo "Deploying Tag version: latest "
+            sh "chmod +x prod_deploy.sh"
+            sh "sh prod_deploy.sh -f ./helm/values.yaml -t latest "
+          }
+        }
+             
+      }
+    }
+
+  }
+
+  post {
+    always {
+      cleanWs()
+    }
+  }
+}
