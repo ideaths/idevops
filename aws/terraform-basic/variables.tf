@@ -1,0 +1,6 @@
+variable "env" {
+  
+}
+variable "region" {
+  
+}
