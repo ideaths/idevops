@@ -1,0 +1,45 @@
+version: '3'
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./mysql_data:/var/lib/mysql
+  consumer:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    depends_on:
+      - mysql
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      KAFKA_TOPIC: ${KAFKA_TOPIC}
+      GROUP_ID: ${GROUP_ID}
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+
+  app:
+    build:
+      context: ./alert
+      dockerfile: Dockerfile
+    container_name: alert
+    ports:
+      - "5000:5000"
+    environment:
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    depends_on:
+      - mysql

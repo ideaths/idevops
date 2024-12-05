@@ -1,0 +1,6 @@
+confluent-kafka
+mysql-connector-python
+protobuf
+opentelemetry-proto
+opentelemetry-api
+opentelemetry-sdk

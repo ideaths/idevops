@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  clickhouse-alert-monitor:
+    build: .
+    container_name: clickhouse-alert-monitor
+    environment:
+      TELEGRAM_TOKEN: "6494203431:AAFWpCkE_sTYAKRkcn0PDv-hPBdArT_tPRE"
+      TELEGRAM_CHAT_ID: "-900003347"
+      CLICKHOUSE_HOST: "10.6.6.17"
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DATABASE: "signoz_traces"
+    restart: always
