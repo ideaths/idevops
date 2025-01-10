@@ -5,7 +5,7 @@
   register: master_initialized
 
 - name: Initialize Kubernetes master node
-  command: kubeadm init --skip-phases=addon/kube-proxy --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=all --upload-certs --control-plane-endpoint "{{ vip }}"
+  command: kubeadm init --skip-phases=addon/kube-proxy --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=all --upload-certs --control-plane-endpoint "{{ vip }}:{{ port }}"
   register: master_init_output
   when: not master_initialized.stat.exists
 

@@ -8,6 +8,11 @@
     helm repo add jetstack https://charts.jetstack.io
     helm repo update
 
+- name: Check if Cilium is already installed
+  shell: kubectl get pods -n kube-system | grep cilium
+  register: cilium_check
+  ignore_errors: yes
+
 - name: Install Cilium CNI
   shell: |
     SEED=$(head -c12 /dev/urandom | base64 -w0) && \
@@ -15,14 +20,15 @@
       --namespace kube-system \
       --set kubeProxyReplacement=true \
       --set k8sServiceHost={{ vip }} \
-      --set k8sServicePort=6443 \
+      --set k8sServicePort={{ port }} \
       --reuse-values \
       --set hubble.relay.enabled=true \
       --set hubble.ui.enabled=true \
       --set loadBalancer.algorithm=maglev \
       --set maglev.tableSize=131071 \
       --set maglev.hashSeed=$SEED
-
+  when: cilium_check.rc != 0
+  delay: 120
 
 # - name: mkdir folder ceph
 #   command: mkdir -p /root/rook-ceph
@@ -40,6 +46,10 @@
 # - name: Install ceph
 #   command: kubectl apply -f /root/rook-ceph/
 
+- name: Check if ingress-nginx is already installed
+  shell: kubectl get pods -n ingress-nginx | grep ingress-nginx-controller
+  register: ingress_check
+  ignore_errors: yes
 
 - name: Install Ingress-nginx
   shell: |
@@ -48,11 +58,13 @@
       --namespace ingress-nginx --create-namespace \
       --set controller.metrics.enabled=true \
       --set-string controller.podAnnotations."prometheus\.io/scrape"="true" \
+      --set controller.service.nodePorts.http=30080 \
+      --set controller.service.nodePorts.https=30443 \
       --set-string controller.podAnnotations."prometheus\.io/port"="10254" --create-namespace
   ignore_errors: yes
+  when: ingress_check.rc != 0
   retries: 3
-  delay: 30
-
+  delay: 240
 # - name: Install Signoz
 #   shell: | 
 #     DEFAULT_STORAGE_CLASS=$(kubectl get storageclass -o=jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
@@ -71,9 +83,15 @@
 - name: Install Metric Server
   command: kubectl apply -f /opt/metric-server.yaml
 
+- name: Check if Rancher is already installed
+  shell: kubectl get pods -n cattle-system | grep rancher
+  register: rancher_check
+  ignore_errors: yes
+
 - name: Install Rancher
   shell: |
     kubectl create namespace cattle-system
     kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.1/cert-manager.crds.yaml
     helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.16.1
     helm upgrade -i rancher rancher-stable/rancher --namespace cattle-system --set letsEncrypt.email="iducok@idevops.io.vn" --set hostname=rancher.idevops.io.vn --set ingress.ingressClassName=nginx --set global.cattle.psp.enabled=false --set ingress.tls.source=rancher --set ingress.tls.source=letsEncrypt --set ingress.tls.source=secret --set bootstrapPassword=admin
+  when: rancher_check.rc != 0

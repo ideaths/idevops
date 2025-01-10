@@ -1,0 +1,30 @@
+---
+- name: Cài đặt Keepalived trên hệ thống Debian/Ubuntu
+  apt:
+    name: keepalived
+    state: present
+    update_cache: yes
+    
+  when: ansible_facts['os_family'] == "Debian"
+- name: Cài đặt Keepalived trên hệ thống RedHat/CentOS
+  yum:
+    name: keepalived
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Get default network interface
+  ansible.builtin.shell: "ip route | grep default | awk '{print $5}'"
+  register: default_interface
+
+- name: Configure Keepalived
+  template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+  vars:
+    interface: "{{ default_interface.stdout }}"
+
+- name: Khởi động Keepalived và enable service
+  service:
+    name: keepalived
+    state: started
+    enabled: yes

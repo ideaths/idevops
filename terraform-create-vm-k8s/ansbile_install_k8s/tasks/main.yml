@@ -8,21 +8,18 @@
 - include_tasks: 2_install_k8s.yml
   when: "'master' in group_names or 'worker' in group_names"
 
-- include_tasks: 3_configure_keepalived.yml
-  when: "'master' in group_names and inventory_hostname == groups['master'][0]"
-
-- include_tasks: 4_enable_services.yml
+- include_tasks: 2.1_install_haproxy.yml
   when: "'master' in group_names"
+
+- include_tasks: 3_install_keepalived.yml
+  when: "'master' in group_names and inventory_hostname == groups['master'][0]"
 
 - include_tasks: 5_init_master.yml
   when: "'master' in group_names and inventory_hostname == groups['master'][0]"
 
 - include_tasks: 6_join_node.yml
-
-- include_tasks: 7_config_etcd_manifest.yml
-  when: "'master' in group_names"
   
-- include_tasks: 3_configure_keepalived.yml
+- include_tasks: 3_install_keepalived.yml
   when: "'master' in group_names and inventory_hostname != groups['master'][0]"
 
 - include_tasks: 8_install_plugin_k8s.yml

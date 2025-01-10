@@ -1,0 +1,68 @@
+{
+  "k8s-master01-test": {
+    "vm_type": "template-redhat8",
+    "guest_id": "rhel8_64Guest",
+    "num_cpus": 4,
+    "memory": 4096,
+    "host_name": "k8s-master01-test",
+    "domain": "localdomain",
+    "ipv4_address": "10.6.6.31",
+    "ipv4_netmask": 24,
+    "ipv4_gateway": "10.6.6.2"
+  },
+  "k8s-master02-test": {
+    "vm_type": "template-redhat8",
+    "guest_id": "rhel8_64Guest",
+    "num_cpus": 4,
+    "memory": 4096,
+    "host_name": "k8s-master02-test",
+    "domain": "localdomain",
+    "ipv4_address": "10.6.6.32",
+    "ipv4_netmask": 24,
+    "ipv4_gateway": "10.6.6.2"
+  },
+  "k8s-master03-test": {
+    "vm_type": "template-redhat8",
+    "guest_id": "rhel8_64Guest",
+    "num_cpus": 4,
+    "memory": 4096,
+    "host_name": "k8s-master03-test",
+    "domain": "localdomain",
+    "ipv4_address": "10.6.6.33",
+    "ipv4_netmask": 24,
+    "ipv4_gateway": "10.6.6.2"
+  },
+  "k8s-worker01-test": {
+    "vm_type": "template-redhat8",
+    "guest_id": "rhel8_64Guest",
+    "num_cpus": 4,
+    "memory": 8192,
+    "host_name": "k8s-worker01-test",
+    "domain": "localdomain",
+    "ipv4_address": "10.6.6.34",
+    "ipv4_netmask": 24,
+    "ipv4_gateway": "10.6.6.2"
+  },
+  "k8s-worker02-test": {
+    "vm_type": "template-redhat8",
+    "guest_id": "rhel8_64Guest",
+    "num_cpus": 4,
+    "memory": 8192,
+    "host_name": "k8s-worker02-test",
+    "domain": "localdomain",
+    "ipv4_address": "10.6.6.35",
+    "ipv4_netmask": 24,
+    "ipv4_gateway": "10.6.6.2"
+  },  
+  "k8s-worker03-test": {
+    "vm_type": "template-redhat8",
+    "guest_id": "rhel8_64Guest",
+    "num_cpus": 4,
+    "memory": 8192,
+    "host_name": "k8s-worker03-test",
+    "domain": "localdomain",
+    "ipv4_address": "10.6.6.36",
+    "ipv4_netmask": 24,
+    "ipv4_gateway": "10.6.6.2"
+  }
+}

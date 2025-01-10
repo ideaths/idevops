@@ -1,0 +1,39 @@
+global
+  log /dev/log  local0
+  log /dev/log  local1 notice
+  stats socket /var/lib/haproxy/stats level admin
+  chroot /var/lib/haproxy
+  user haproxy
+  group haproxy
+  daemon
+
+defaults
+  log global
+  mode  http
+  option  httplog
+  option  dontlognull
+        timeout connect 5000
+        timeout client 50000
+        timeout server 50000
+
+frontend kubernetes
+    bind *:{{ port }}
+    option tcplog
+    mode tcp
+    default_backend kubernetes-master-nodes
+
+backend kubernetes-master-nodes
+    mode tcp
+    balance leastconn
+    option tcp-check
+    server srv31-master {{ hostvars['k8s-master01'].ansible_host }}:6443 check fall 3 rise 2
+    server srv32-master {{ hostvars['k8s-master01'].ansible_host }}:6443 check fall 3 rise 2
+    server srv33-master {{ hostvars['k8s-master01'].ansible_host }}:6443 check fall 3 rise 2
+
+listen stats
+    bind *:8080
+    mode http
+    stats enable
+    stats uri /
+    stats realm HAProxy\ Statistics
+    stats auth admin:haproxy

@@ -1,5 +1,9 @@
+
 ---
-- name: Install required packages for container runtime
+- name: Detect OS and version
+  ansible.builtin.setup:
+
+- name: Install required packages for container runtime (RedHat/CentOS)
   dnf:
     name:
       - yum-utils
@@ -7,28 +11,41 @@
       - lvm2
       - iscsi-initiator-utils
     state: present
+  when: ansible_facts['os_family'] == 'RedHat'
 
-- name: Check if Docker repository file exists
-  stat:
-    path: /etc/yum.repos.d/docker-ce.repo
-  register: docker_repo
+- name: Install required packages for container runtime (Ubuntu/Debian)
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+  when: ansible_facts['os_family'] == 'Debian'
 
-- name: Add Docker repository for containerd
+- name: Add Docker repository (RedHat/CentOS)
   get_url:
     url: https://download.docker.com/linux/centos/docker-ce.repo
     dest: /etc/yum.repos.d/docker-ce.repo
     mode: '0644'
-  when: not docker_repo.stat.exists
+  when: ansible_facts['os_family'] == 'RedHat'
 
-- name: Check if containerd is installed
-  dnf:
-    name: containerd.io
+- name: Add Docker repository (Ubuntu/Debian)
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
     state: present
-  register: containerd_installed
-  ignore_errors: yes
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Add Docker APT repository (Ubuntu/Debian)
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    state: present
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: Install containerd
-  dnf:
+  package:
     name: containerd.io
     state: present
   when: containerd_installed is not defined or containerd_installed.failed
@@ -40,7 +57,9 @@
     mode: '0755'
 
 - name: Generate default containerd configuration file
-  command: containerd config default > /etc/containerd/config.toml
+  shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
 
 - name: Comment out disabled_plugins = ["cri"]
   lineinfile:
@@ -61,7 +80,7 @@
     path: /etc/yum.repos.d/kubernetes.repo
   register: kubernetes_repo
 
-- name: Add Kubernetes repository
+- name: Add Kubernetes repository (RedHat/CentOS)
   copy:
     content: |
       [kubernetes]
@@ -73,7 +92,19 @@
       exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
     dest: /etc/yum.repos.d/kubernetes.repo
     mode: '0644'
-  when: not kubernetes_repo.stat.exists
+  when: ansible_facts['os_family'] == 'RedHat' and not kubernetes_repo.stat.exists
+
+- name: Add Kubernetes APT repository (Ubuntu/Debian)
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Add Kubernetes APT repository (Ubuntu/Debian)
+  apt_repository:
+    repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
+    state: present
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: Install Kubernetes components and other required packages
   dnf:
@@ -81,24 +112,40 @@
       - kubelet
       - kubeadm
       - kubectl
-      - keepalived
     state: present
     disable_excludes: kubernetes
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Install Kubernetes components and other required packages
+  apt:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    disable_excludes: kubernetes
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Enable kubelet service
+  systemd:
+    name: kubelet
+    enabled: yes
+    state: started
 
 - name: Check if Helm is installed
   stat:
     path: /usr/local/bin/helm
   register: helm_installed
-
+  
 - name: Install Helm using script from GitHub
   get_url:
     url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
     dest: /tmp/get-helm-3.sh
     mode: '0755'
-  when: not helm_installed.stat.exists
+  when: "not helm_installed.stat.exists and 'master' in group_names and inventory_hostname == groups['master'][0]"
 
 - name: Execute Helm installation script
   command: /tmp/get-helm-3.sh
-  when: not helm_installed.stat.exists
+  when: "not helm_installed.stat.exists and 'master' in group_names and inventory_hostname == groups['master'][0]"
   args:
     creates: /usr/local/bin/helm

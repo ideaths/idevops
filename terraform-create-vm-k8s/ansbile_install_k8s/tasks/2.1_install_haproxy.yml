@@ -1,0 +1,28 @@
+
+---
+- name: Install HAProxy package (Debian/Ubuntu)
+  apt:
+    name: haproxy
+    state: present
+    update_cache: yes
+  when: ansible_facts['os_family'] == "Debian"
+  
+- name: Install HAProxy package (RedHat/CentOS)
+  yum:
+    name: haproxy
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Configure HAProxy for Kubernetes Master nodes
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable and restart HAProxy service
+  systemd:
+    name: haproxy
+    enabled: yes
+    state: restarted

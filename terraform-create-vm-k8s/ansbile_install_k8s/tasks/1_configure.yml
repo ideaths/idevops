@@ -1,25 +1,36 @@
----
-- name: Disable SELinux temporarily
-  command: setenforce 0
 
-- name: Disable SELinux permanently
+---
+- name: Detect OS and version
+  ansible.builtin.setup:
+
+- name: Disable SELinux temporarily (RedHat/CentOS)
+  command: setenforce 0
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Disable SELinux permanently (RedHat/CentOS)
   lineinfile:
     path: /etc/selinux/config
     regexp: '^SELINUX=enforcing$'
     line: 'SELINUX=permissive'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: Set hostname
   hostname:
     name: "{{ inventory_hostname }}"
 
-- name: Stop firewalld service
+- name: Stop and disable firewalld (RedHat/CentOS)
   service:
     name: firewalld
     state: stopped
-- name: Disable firewalld service
-  service:
-    name: firewalld
     enabled: no
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Stop and disable ufw (Ubuntu/Debian)
+  service:
+    name: ufw
+    state: stopped
+    enabled: no
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: Load necessary kernel modules for containerd
   copy:
@@ -29,8 +40,12 @@
     dest: /etc/modules-load.d/containerd.conf
 
 - name: Load kernel modules
-  command: modprobe overlay && modprobe br_netfilter
-
+  shell: |
+    modprobe overlay
+    modprobe br_netfilter
+  args:
+    warn: false
+    
 - name: Configure sysctl for Kubernetes networking
   copy:
     content: |
@@ -45,16 +60,15 @@
 - name: Disable swap
   command: swapoff -a
 
-- name: Loại bỏ swap từ /etc/fstab để tắt vĩnh viễn
+- name: Remove swap entries from /etc/fstab
   ansible.builtin.replace:
     path: /etc/fstab
     regexp: '^(.*swap.*)$'
     replace: '# \1'
 
-- name: Reload fstab để áp dụng thay đổi
-  ansible.builtin.command: mount -a
+- name: Reload fstab to apply changes
+  command: mount -a
 
-# Thêm các node vào /etc/hosts từ inventory nếu chưa tồn tại
 - name: Add master and worker nodes to /etc/hosts
   lineinfile:
     path: /etc/hosts
@@ -62,6 +76,6 @@
     state: present
     create: yes
   loop: "{{ groups['all'] }}"
-  when: 
+  when:
     - hostvars[item].ansible_host is defined
     - "'{{ hostvars[item].ansible_host }} {{ item }}' not in lookup('file', '/etc/hosts')"

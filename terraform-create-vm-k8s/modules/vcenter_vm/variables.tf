@@ -97,6 +97,7 @@ variable "domain" {
   type        = string
 }
 
+
 variable "GOVC_URL" {}
 variable "GOVC_USERNAME" {}
 variable "GOVC_PASSWORD" {}

@@ -14,6 +14,7 @@
   environment:
     ANSIBLE_HOST_KEY_CHECKING: "False"
   become: yes
+  gather_facts: yes
   vars_files:
     - vars/main.yml
   tasks:

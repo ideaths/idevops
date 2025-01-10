@@ -1,9 +1,16 @@
-- name: Check if Podman is installed
+---
+- name: Set package manager based on OS
+  set_fact:
+    pkg_manager: "{{ 'dnf' if ansible_facts['os_family'] == 'RedHat' else 'apt' }}"
+  when: ansible_facts['os_family'] in ['RedHat', 'Debian']
+
+- name: Check if Podman is installed (RedHat/CentOS)
   command: rpm -q podman
   register: podman_installed
   ignore_errors: yes
+  when: ansible_facts['os_family'] == 'RedHat'
 
-- name: Remove Podman packages
+- name: Remove Podman packages for RedHat/CentOS
   dnf:
     name:
       - podman
@@ -15,11 +22,38 @@
       - containernetworking-plugins
       - containers-common
     state: absent
-  when: podman_installed.rc == 0  
+  when: ansible_facts['os_family'] == 'RedHat' and podman_installed.rc == 0
 
-- name: Remove Podman containers directory
+- name: Remove Podman containers directory RedHat/CentOS
   file:
     path: /var/lib/containers
     state: absent
     force: yes
-  when: podman_installed.rc == 0 
+  when: podman_installed is defined and podman_installed.rc is defined and podman_installed.rc == 0
+
+
+- name: Check if Podman is installed (Debian/Ubuntu)
+  shell: "dpkg -l | grep -q podman"
+  register: podman_installed
+  ignore_errors: yes
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Remove Podman packages for Debian/Ubuntu
+  apt:
+    name:
+      - podman
+      - podman-plugins
+      - containernetworking-plugins
+      - containers-common
+    state: absent
+    purge: yes
+    update_cache: yes
+  when: ansible_facts['os_family'] == 'Debian' and podman_installed is defined and podman_installed.rc is defined and podman_installed.rc == 0
+
+
+- name: Remove Podman containers directory Debian/Ubuntu
+  file:
+    path: /var/lib/containers
+    state: absent
+    force: yes
+  when: podman_installed is defined and podman_installed.rc is defined and podman_installed.rc == 0

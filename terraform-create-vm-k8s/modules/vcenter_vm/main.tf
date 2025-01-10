@@ -34,6 +34,11 @@ resource "vsphere_virtual_machine" "vm" {
       dns_server_list = ["10.6.6.129"]
     }
   }
+
+  cdrom {
+    client_device = true
+  }
+
   provisioner "local-exec" {
     command = "sleep 60 && govc vm.power -reset ${self.name}"
     environment = {

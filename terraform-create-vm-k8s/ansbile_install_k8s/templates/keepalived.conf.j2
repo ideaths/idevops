@@ -11,4 +11,12 @@ vrrp_instance VI_1 {
     virtual_ipaddress {
         {{ vip }}
     }
+    track_script {
+        chk_haproxy
+    }
+    vrrp_script chk_haproxy {
+    script "killall -0 haproxy"
+    interval 2
+    weight 2
+    }
 }
