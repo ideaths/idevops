@@ -9,3 +9,8 @@ ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansbile_install_k8s/inventor
 
 
 terraform apply -auto-approve -var "GOVC_URL=vcenter.idevops.io.vn" -var "GOVC_USERNAME=administrator@vsphere.local" -var "GOVC_PASSWORD=123abc@A" -parallelism=3 && sleep 100 && rm -rf /root/.ssh/known_hosts && ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansbile_install_k8s/inventory.ini ansbile_install_k8s/install-kube.yml
+
+
+rm -rf /root/.ssh/known_hosts && ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i inventory.ini 0-config-ansible.yml
+ansible-playbook -i inventory.ini 1-install-kube.yml
+ansible-playbook -i inventory.ini 2-install-plugins-k8s.yml

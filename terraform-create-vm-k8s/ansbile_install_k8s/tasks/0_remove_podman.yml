@@ -31,7 +31,6 @@
     force: yes
   when: podman_installed is defined and podman_installed.rc is defined and podman_installed.rc == 0
 
-
 - name: Check if Podman is installed (Debian/Ubuntu)
   shell: "dpkg -l | grep -q podman"
   register: podman_installed
@@ -49,7 +48,6 @@
     purge: yes
     update_cache: yes
   when: ansible_facts['os_family'] == 'Debian' and podman_installed is defined and podman_installed.rc is defined and podman_installed.rc == 0
-
 
 - name: Remove Podman containers directory Debian/Ubuntu
   file:

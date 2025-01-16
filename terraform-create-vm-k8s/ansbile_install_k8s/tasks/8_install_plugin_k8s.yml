@@ -1,4 +1,3 @@
----
 - name: Add Helm repository
   shell: |
     helm repo add cilium https://helm.cilium.io/
@@ -11,8 +10,6 @@
 - name: Check if Cilium is already installed
   shell: kubectl get pods -n kube-system | grep cilium
   register: cilium_check
-  ignore_errors: yes
-
 - name: Install Cilium CNI
   shell: |
     SEED=$(head -c12 /dev/urandom | base64 -w0) && \
@@ -28,29 +25,9 @@
       --set maglev.tableSize=131071 \
       --set maglev.hashSeed=$SEED
   when: cilium_check.rc != 0
-  delay: 120
-
-# - name: mkdir folder ceph
-#   command: mkdir -p /root/rook-ceph
-    
-# - name: copy file yaml ceph
-#   template:
-#     src: "{{ item }}"
-#     dest: "/root/rook-ceph/{{ item | basename | regex_replace('\\.js$', '') }}"
-#     owner: root
-#     group: root
-#     mode: '0644'
-#   with_fileglob:
-#     - "templates/rook-ceph/*.js"
-
-# - name: Install ceph
-#   command: kubectl apply -f /root/rook-ceph/
-
 - name: Check if ingress-nginx is already installed
   shell: kubectl get pods -n ingress-nginx | grep ingress-nginx-controller
   register: ingress_check
-  ignore_errors: yes
-
 - name: Install Ingress-nginx
   shell: |
     helm upgrade -i ingress-nginx ingress-nginx \
@@ -61,33 +38,18 @@
       --set controller.service.nodePorts.http=30080 \
       --set controller.service.nodePorts.https=30443 \
       --set-string controller.podAnnotations."prometheus\.io/port"="10254" --create-namespace
-  ignore_errors: yes
   when: ingress_check.rc != 0
-  retries: 3
-  delay: 240
-# - name: Install Signoz
-#   shell: | 
-#     DEFAULT_STORAGE_CLASS=$(kubectl get storageclass -o=jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
-#     kubectl patch storageclass "$DEFAULT_STORAGE_CLASS" -p '{"allowVolumeExpansion": true}'
-#     helm --namespace platform upgrade -i signoz signoz/signoz --create-namespace
-#   ignore_errors: yes
-
-# - name: Install kube-prometheus-stack
-#   shell: helm repo update && helm upgrade -i prometheus prometheus-community/kube-prometheus-stack -n monitor --create-namespace
-
-- name: Upload Metric Server YAML file
-  template:
-    src: metric-server.yaml.j2 
-    dest: /opt/metric-server.yaml
-
+  
+- name: Check if Metric Server is already installed
+  shell: kubectl get pods -n cattle-system | grep metric-server
+  register: metrics_check
 - name: Install Metric Server
   command: kubectl apply -f /opt/metric-server.yaml
+  when: metrics_check.rc != 0
 
 - name: Check if Rancher is already installed
   shell: kubectl get pods -n cattle-system | grep rancher
   register: rancher_check
-  ignore_errors: yes
-
 - name: Install Rancher
   shell: |
     kubectl create namespace cattle-system

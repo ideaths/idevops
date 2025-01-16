@@ -12,18 +12,17 @@ module "vcenter_vms" {
   resource_pool_id     = data.vsphere_compute_cluster.cluster.resource_pool_id
   datastore_id         = data.vsphere_datastore.ds2.id
   network_id           = data.vsphere_network.network.id
-  template_uuid        = data.vsphere_virtual_machine.template[each.key].id  # Pass the template UUID
+  template_uuid        = data.vsphere_virtual_machine.template[each.key].id
   guest_id             = each.value.guest_id
-  datacenter_id        = data.vsphere_datacenter.dc.id
-  num_cpus             = each.value.num_cpus       // Pass CPU count
-  memory               = each.value.memory         // Pass Memory
+  num_cpus             = each.value.num_cpus
+  memory               = each.value.memory
   vm_hostname          = each.value.host_name
   domain               = each.value.domain
   ipv4_address         = each.value.ipv4_address
   ipv4_netmask         = each.value.ipv4_netmask
   ipv4_gateway         = each.value.ipv4_gateway
-  GOVC_URL       = var.GOVC_URL
-  GOVC_USERNAME  = var.GOVC_USERNAME
-  GOVC_PASSWORD  = var.GOVC_PASSWORD
+  GOVC_URL            = var.GOVC_URL
+  GOVC_USERNAME       = var.GOVC_USERNAME
+  GOVC_PASSWORD       = var.GOVC_PASSWORD
 }
 
