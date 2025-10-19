@@ -1,0 +1,11 @@
+🔥 **{{ alert_name }}**
+{% if summary %}📝 {{ summary }}{% endif %}
+{% if description %}📄 {{ description }}{% endif %}
+🏷️ {{ routing_label|title }}: {{ routing_value }}
+
+{% set keys = ['namespace','service','job','instance','severity'] %}
+{% for key, value in labels.items() %}
+{% if key != routing_label and key in keys %}
+🔖 {{ key|title }}: {{ value }}
+{% endif %}
+{% endfor %}

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: webhook-alert-gapo
+description: A Helm chart for deploying the webhook-alert-gapo Flask app
+version: 0.2.0
+appVersion: "0.2.0"

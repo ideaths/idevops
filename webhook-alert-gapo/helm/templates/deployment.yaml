@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "webhook-alert-gapo.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "webhook-alert-gapo.name" . }}
+    helm.sh/chart: {{ include "webhook-alert-gapo.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "webhook-alert-gapo.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "webhook-alert-gapo.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "webhook-alert-gapo.fullname" . }}
+      {{- end }}
+      {{- if .Values.podSecurityContext.enabled }}
+      securityContext:
+        runAsNonRoot: {{ default true .Values.podSecurityContext.runAsNonRoot }}
+        runAsUser: {{ default 1000 .Values.podSecurityContext.runAsUser }}
+        runAsGroup: {{ default 1000 .Values.podSecurityContext.runAsGroup }}
+        seccompProfile:
+          type: {{ default "RuntimeDefault" .Values.podSecurityContext.seccompProfile.type }}
+      {{- end }}
+      containers:
+        - name: {{ include "webhook-alert-gapo.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "webhook-alert-gapo.fullname" . }}-env
+            - secretRef:
+                name: {{ include "webhook-alert-gapo.fullname" . }}-secret
+          {{- if .Values.containerSecurityContext.enabled }}
+          securityContext:
+            allowPrivilegeEscalation: {{ default false .Values.containerSecurityContext.allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ default true .Values.containerSecurityContext.readOnlyRootFilesystem }}
+            {{- if .Values.containerSecurityContext.capabilities }}
+            capabilities:
+              {{- toYaml .Values.containerSecurityContext.capabilities | nindent 12 }}
+            {{- else }}
+            capabilities:
+              drop:
+                - ALL
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: templates
+              mountPath: /app/templates
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: templates
+          configMap:
+            name: {{ include "webhook-alert-gapo.fullname" . }}-templates
+            optional: true

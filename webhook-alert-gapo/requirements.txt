@@ -1,0 +1,12 @@
+Flask==2.3.3
+Werkzeug==2.3.7
+flask-limiter==3.5.0
+flask-caching==2.0.2
+requests==2.32.3
+urllib3==2.2.2
+Jinja2==3.1.4
+marshmallow==4.0.0
+tenacity==8.2.3
+prometheus-client==0.20.0
+pyotp==2.8.0
+gunicorn==21.2.0

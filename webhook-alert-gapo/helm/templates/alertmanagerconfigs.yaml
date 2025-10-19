@@ -1,0 +1,113 @@
+{{- if .Values.alertmanagerConfigs.enabled }}
+{{- $selectorLabel := default "alertmanager" .Values.alertmanagerConfigs.selectorLabel }}
+{{- $alertmanagerName := default "main" .Values.alertmanagerConfigs.alertmanagerName }}
+{{- $webhookURL := .Values.alertmanagerConfigs.webhookURL }}
+{{- $common := .Values.alertmanagerConfigs.common }}
+{{- $globalToken := default "" .Values.alertmanagerConfigs.bearer.token }}
+{{- range $i, $item := .Values.alertmanagerConfigs.items }}
+apiVersion: monitoring.coreos.com/v1beta1
+kind: AlertmanagerConfig
+metadata:
+  name: {{ printf "%s-%s" (include "webhook-alert-gapo.fullname" $) $item.name | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $item.namespace }}
+  labels:
+    {{ $selectorLabel }}: {{ $alertmanagerName }}
+spec:
+  route:
+    matchers:
+      - name: namespace
+        value: ^({{ $item.namespace }})$
+        isRegex: true
+      {{- if $common.systemRegex }}
+      - name: system
+        value: {{ $common.systemRegex | quote }}
+        isRegex: true
+      {{- end }}
+    groupBy:
+      {{- range $common.groupBy }}
+      - {{ . }}
+      {{- end }}
+    groupWait: {{ default "30s" $common.groupWait }}
+    groupInterval: {{ default "5m" $common.groupInterval }}
+    repeatInterval: {{ default "4h" $common.repeatInterval }}
+    receiver: {{ printf "blackhole-%s" $item.name }}
+    routes:
+      {{- with $item.whitelist }}
+      {{- if .instances.ipRegex }}
+      - receiver: {{ printf "webhook-alert-gapo-%s" $item.name }}
+        matchers:
+          - name: instance
+            value: {{ .instances.ipRegex | quote }}
+            isRegex: true
+          {{- if .severities }}
+          - name: severity
+            value: ^({{ join "|" .severities }})$
+            isRegex: true
+          {{- end }}
+          {{- if .jobs }}
+          - name: job
+            value: ^({{ join "|" .jobs }})$
+            isRegex: true
+          {{- end }}
+          {{- if .alertnames }}
+          - name: alertname
+            value: ^({{ join "|" .alertnames }})$
+            isRegex: true
+          {{- end }}
+      {{- end }}
+      {{- if .instances.hostRegex }}
+      - receiver: {{ printf "webhook-alert-gapo-%s" $item.name }}
+        matchers:
+          - name: instance
+            value: {{ .instances.hostRegex | quote }}
+            isRegex: true
+          {{- if .severities }}
+          - name: severity
+            value: ^({{ join "|" .severities }})$
+            isRegex: true
+          {{- end }}
+          {{- if .jobs }}
+          - name: job
+            value: ^({{ join "|" .jobs }})$
+            isRegex: true
+          {{- end }}
+          {{- if .alertnames }}
+          - name: alertname
+            value: ^({{ join "|" .alertnames }})$
+            isRegex: true
+          {{- end }}
+      {{- end }}
+      {{- end }}
+      {{- with $item.blacklist }}
+      {{- if .alertnames }}
+      - receiver: {{ printf "blackhole-%s" $item.name }}
+        matchers:
+          - name: alertname
+            value: ^({{ join "|" .alertnames }})$
+            isRegex: true
+      {{- end }}
+      {{- if .jobs }}
+      - receiver: {{ printf "blackhole-%s" $item.name }}
+        matchers:
+          - name: job
+            value: ^({{ join "|" .jobs }})$
+            isRegex: true
+      {{- end }}
+      {{- end }}
+  receivers:
+    - name: {{ printf "webhook-alert-gapo-%s" $item.name }}
+      webhookConfigs:
+        - url: {{ $webhookURL | quote }}
+          sendResolved: true
+          httpConfig:
+            followRedirects: true
+            {{- $itemToken := default $globalToken $item.bearerToken }}
+            {{- if ne (default "" $itemToken) "" }}
+            bearerTokenSecret:
+              name: {{ printf "%s-am-bearer-%s" (include "webhook-alert-gapo.fullname" $) $item.name | trunc 63 | trimSuffix "-" }}
+              key: token
+            {{- end }}
+    - name: {{ printf "blackhole-%s" $item.name }}
+---
+{{- end }}
+{{- end }}

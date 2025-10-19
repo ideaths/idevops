@@ -1,0 +1,54 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "webhook-alert-gapo.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "webhook-alert-gapo.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "webhook-alert-gapo.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - {{- if or (.Values.networkPolicy.ingress.fromNamespaces) (.Values.networkPolicy.ingress.fromCIDRs) }}
+      from:
+        {{- range $ns := .Values.networkPolicy.ingress.fromNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns | quote }}
+        {{- end }}
+        {{- range $cidr := .Values.networkPolicy.ingress.fromCIDRs }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+      {{- end }}
+      ports:
+        {{- range $p := .Values.networkPolicy.ingress.ports }}
+        - port: {{ $p }}
+          protocol: TCP
+        {{- end }}
+  egress:
+    - {{- if or (.Values.networkPolicy.egress.toCIDRs) (.Values.networkPolicy.egress.toNamespaces) }}
+      to:
+        {{- range $cidr := .Values.networkPolicy.egress.toCIDRs }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+        {{- range $ns := .Values.networkPolicy.egress.toNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns | quote }}
+        {{- end }}
+      {{- end }}
+      ports:
+        {{- range $p := .Values.networkPolicy.egress.ports }}
+        - port: {{ $p }}
+          protocol: TCP
+        {{- end }}
+{{- end }}

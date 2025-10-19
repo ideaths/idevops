@@ -1,0 +1,16 @@
+{{- if .Values.templates }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "webhook-alert-gapo.fullname" . }}-templates
+  labels:
+    app.kubernetes.io/name: {{ include "webhook-alert-gapo.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    helm.sh/chart: {{ include "webhook-alert-gapo.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  {{- if .Values.templates.alert_template_html }}
+  alert_template.html: |
+{{ .Values.templates.alert_template_html | nindent 4 }}
+  {{- end }}
+{{- end }}
