@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -U pip setuptools wheel pyarmor \
 # Common runtime base
 FROM python:3.11-alpine AS runtime-base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN apk add --no-cache ca-certificates curl
+RUN apk add --no-cache ca-certificates curl tzdata
 RUN adduser -D appuser
 WORKDIR /app
 COPY requirements.txt /app/requirements.txt

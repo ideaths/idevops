@@ -4,8 +4,12 @@
 {{- $webhookURL := .Values.alertmanagerConfigs.webhookURL }}
 {{- $common := .Values.alertmanagerConfigs.common }}
 {{- $globalToken := default "" .Values.alertmanagerConfigs.bearer.token }}
+{{- $hasBeta := .Capabilities.APIVersions.Has "monitoring.coreos.com/v1beta1" }}
+{{- $hasAlpha := .Capabilities.APIVersions.Has "monitoring.coreos.com/v1alpha1" }}
+{{- if or $hasBeta $hasAlpha }}
+{{- $apiVersion := ternary "monitoring.coreos.com/v1beta1" "monitoring.coreos.com/v1alpha1" $hasBeta }}
 {{- range $i, $item := .Values.alertmanagerConfigs.items }}
-apiVersion: monitoring.coreos.com/v1beta1
+apiVersion: {{ $apiVersion }}
 kind: AlertmanagerConfig
 metadata:
   name: {{ printf "%s-%s" (include "webhook-alert-gapo.fullname" $) $item.name | trunc 63 | trimSuffix "-" }}
@@ -17,11 +21,11 @@ spec:
     matchers:
       - name: namespace
         value: ^({{ $item.namespace }})$
-        isRegex: true
+        matchType: =~
       {{- if $common.systemRegex }}
       - name: system
         value: {{ $common.systemRegex | quote }}
-        isRegex: true
+        matchType: =~
       {{- end }}
     groupBy:
       {{- range $common.groupBy }}
@@ -38,21 +42,21 @@ spec:
         matchers:
           - name: instance
             value: {{ .instances.ipRegex | quote }}
-            isRegex: true
+            matchType: =~
           {{- if .severities }}
           - name: severity
             value: ^({{ join "|" .severities }})$
-            isRegex: true
+            matchType: =~
           {{- end }}
           {{- if .jobs }}
           - name: job
             value: ^({{ join "|" .jobs }})$
-            isRegex: true
+            matchType: =~
           {{- end }}
           {{- if .alertnames }}
           - name: alertname
             value: ^({{ join "|" .alertnames }})$
-            isRegex: true
+            matchType: =~
           {{- end }}
       {{- end }}
       {{- if .instances.hostRegex }}
@@ -60,21 +64,21 @@ spec:
         matchers:
           - name: instance
             value: {{ .instances.hostRegex | quote }}
-            isRegex: true
+            matchType: =~
           {{- if .severities }}
           - name: severity
             value: ^({{ join "|" .severities }})$
-            isRegex: true
+            matchType: =~
           {{- end }}
           {{- if .jobs }}
           - name: job
             value: ^({{ join "|" .jobs }})$
-            isRegex: true
+            matchType: =~
           {{- end }}
           {{- if .alertnames }}
           - name: alertname
             value: ^({{ join "|" .alertnames }})$
-            isRegex: true
+            matchType: =~
           {{- end }}
       {{- end }}
       {{- end }}
@@ -84,14 +88,14 @@ spec:
         matchers:
           - name: alertname
             value: ^({{ join "|" .alertnames }})$
-            isRegex: true
+            matchType: =~
       {{- end }}
       {{- if .jobs }}
       - receiver: {{ printf "blackhole-%s" $item.name }}
         matchers:
           - name: job
             value: ^({{ join "|" .jobs }})$
-            isRegex: true
+            matchType: =~
       {{- end }}
       {{- end }}
   receivers:
@@ -109,5 +113,6 @@ spec:
             {{- end }}
     - name: {{ printf "blackhole-%s" $item.name }}
 ---
+{{- end }}
 {{- end }}
 {{- end }}

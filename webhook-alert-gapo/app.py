@@ -28,12 +28,13 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
-from marshmallow import Schema, fields, ValidationError, validates_schema
+from marshmallow import Schema, fields, ValidationError, validates_schema, EXCLUDE
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from werkzeug.middleware.proxy_fix import ProxyFix
 import pyotp
 from prometheus_client import Counter, Histogram, Gauge, generate_latest
 import ipaddress
+from urllib.parse import urlparse
 
 # -----------------------------------------------------------------------------
 # 1. Enhanced Logging Configuration
@@ -44,6 +45,13 @@ class ContextFilter(logging.Filter):
         record.request_id = getattr(g, 'request_id', 'no-request') if has_request_context() else 'no-request'
         return True
 
+class SafeFormatter(logging.Formatter):
+    """Formatter that guarantees request_id exists on all records"""
+    def format(self, record):
+        if not hasattr(record, 'request_id'):
+            record.request_id = 'no-request'
+        return super().format(record)
+
 def setup_logging():
     """Configure structured logging with context"""
     log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
@@ -52,15 +60,19 @@ def setup_logging():
     handlers = []
     if os.getenv('LOG_TO_STDOUT', 'true').lower() == 'true':
         handlers.append(logging.StreamHandler(sys.stdout))
-    if os.getenv('LOG_TO_FILE', 'false').lower() == 'true' or os.getenv('LOG_FILE_PATH'):
-        log_file = os.getenv('LOG_FILE_PATH', 'alert_router.log')
+    if os.getenv('LOG_TO_FILE', 'false').lower() == 'true':
+        log_file = os.getenv('LOG_FILE_PATH', '/tmp/alert_router.log')
         max_bytes = int(os.getenv('LOG_MAX_BYTES', '10485760'))  # 10MB
         backup_count = int(os.getenv('LOG_BACKUP_COUNT', '5'))
-        handlers.append(RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count))
+        try:
+            handlers.append(RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count))
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"File logging disabled: {e}")
+            if not any(isinstance(h, logging.StreamHandler) for h in handlers):
+                handlers.append(logging.StreamHandler(sys.stdout))
     
     logging.basicConfig(
         level=getattr(logging, log_level),
-        format=log_format,
         handlers=handlers
     )
     
@@ -73,6 +85,18 @@ def setup_logging():
     logging.getLogger('werkzeug._internal').addFilter(context_filter)
     logging.getLogger('gunicorn.error').addFilter(context_filter)
     logging.getLogger('gunicorn.access').addFilter(context_filter)
+    # Also ensure third-party libraries carry request_id
+    logging.getLogger('urllib3').addFilter(context_filter)
+    logging.getLogger('requests').addFilter(context_filter)
+
+    # Ensure all handlers use SafeFormatter that provides default request_id
+    safe_formatter = SafeFormatter(log_format)
+    for h in root_logger.handlers:
+        h.setFormatter(safe_formatter)
+    for name in ['werkzeug', 'werkzeug._internal', 'gunicorn.error', 'gunicorn.access', 'urllib3', 'requests', __name__]:
+        lg = logging.getLogger(name)
+        for h in getattr(lg, 'handlers', []):
+            h.setFormatter(safe_formatter)
     
     return logging.getLogger(__name__)
 
@@ -112,12 +136,17 @@ class Config:
         self.MAX_QUEUE_SIZE = int(os.getenv("MAX_QUEUE_SIZE", "1000"))
         self.WORKER_THREADS = int(os.getenv("WORKER_THREADS", "4"))
         self.QUEUE_PUT_TIMEOUT = int(os.getenv("QUEUE_PUT_TIMEOUT", "2"))
+        # Worker idle log throttle interval (seconds); 0 disables idle logging
+        self.WORKER_IDLE_LOG_INTERVAL = int(os.getenv("WORKER_IDLE_LOG_INTERVAL", "30"))
         
         # Rate limiting
         self.RATE_LIMIT = os.getenv("RATE_LIMIT", "100 per minute")
         
         # Maximum allowed payload size
         self.MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", "1048576"))
+        
+        # Detailed logging flag for alerts
+        self.LOG_ALERT_DETAILS = os.getenv("LOG_ALERT_DETAILS", "false").lower() == "true"
         
         # Routing configuration
         self.ROUTING_LABEL = os.getenv("ROUTING_LABEL", "system")
@@ -248,6 +277,10 @@ class AlertSchema(Schema):
     startsAt = fields.DateTime(load_default=None)
     endsAt = fields.DateTime(load_default=None)
     generatorURL = fields.Str(load_default="")
+    fingerprint = fields.Str(load_default="")
+
+    class Meta:
+        unknown = EXCLUDE
 
 class AlertmanagerWebhookSchema(Schema):
     """Schema for validating Alertmanager webhook payload"""
@@ -260,7 +293,11 @@ class AlertmanagerWebhookSchema(Schema):
     commonAnnotations = fields.Dict(load_default={})
     externalURL = fields.Str(load_default="")
     alerts = fields.List(fields.Nested(AlertSchema), required=True)
-    
+    truncatedAlerts = fields.Boolean(load_default=False)
+
+    class Meta:
+        unknown = EXCLUDE
+
     @validates_schema
     def validate_alerts(self, data, **kwargs):
         if not data.get('alerts'):
@@ -447,6 +484,8 @@ class AlertQueue:
         self.workers = []
         self.running = True
         self.lock = Lock()
+        self.last_idle_log_time = 0
+        self._was_busy = False
         
     def start_workers(self, num_workers=4):
         """Start worker threads"""
@@ -467,8 +506,11 @@ class AlertQueue:
                     if item is None:
                         break
                     metrics['queue_size'].set(self.queue.qsize())
-                    # Process the alert
-                    self._process_alert_item(item)
+                    # Process the alert within Flask application context
+                    with app.app_context():
+                        self._process_alert_item(item)
+                    # Mark that we were busy handling work
+                    self._was_busy = True
                 except Exception as e:
                     logger.exception(f"Worker thread error: {e}")
                 finally:
@@ -478,7 +520,15 @@ class AlertQueue:
                     except Exception:
                         pass
             except Empty:
-                logger.debug("Worker queue idle: no item within timeout")
+                # Only emit idle log when transitioning from busy to idle
+                if self._was_busy and config.WORKER_IDLE_LOG_INTERVAL > 0:
+                    now = time.time()
+                    with self.lock:
+                        if now - self.last_idle_log_time >= config.WORKER_IDLE_LOG_INTERVAL:
+                            logger.debug("Worker queue idle: no item within timeout")
+                            self.last_idle_log_time = now
+                            # Reset busy state after first idle log
+                            self._was_busy = False
                 continue
             except Exception as e:
                 logger.exception(f"Worker outer loop error: {e}")
@@ -486,10 +536,19 @@ class AlertQueue:
     def _process_alert_item(self, item):
         """Process a single alert item"""
         try:
+            # Set up a minimal Flask g context for logging
+            if has_request_context():
+                # We're already in a request context
+                pass
+            else:
+                # We're in a worker thread, set up minimal context
+                g.request_id = item.get('request_id', 'worker-thread')
+            
             send_to_gapo_with_retry(
                 item['message'],
                 item['config'],
-                item['routing_value']
+                item['routing_value'],
+                request_id=item.get('request_id', 'worker-thread')
             )
         except Exception as e:
             logger.error(f"Failed to process alert: {e}")
@@ -633,15 +692,21 @@ alert_filter = AlertFilter(config)
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type(requests.exceptions.RequestException)
 )
-def send_to_gapo_with_retry(message: str, chat_config: ChatConfig, routing_value: str):
+def send_to_gapo_with_retry(message: str, chat_config: ChatConfig, routing_value: str, request_id: str = "unknown"):
     """Send message to Gapo with retry logic"""
     
     start_time = time.time()
     
+    # Safely determine request ID without relying on Flask `g` outside request context
+    if has_request_context():
+        x_request_id = g.get('request_id', request_id or 'unknown')
+    else:
+        x_request_id = request_id or 'unknown'
+    
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-Request-ID': g.get('request_id', 'unknown'),
+        'X-Request-ID': x_request_id,
         'x-hub-signature': config.GAPO_SIGNATURE
     }
     
@@ -656,6 +721,32 @@ def send_to_gapo_with_retry(message: str, chat_config: ChatConfig, routing_value
         }
     }
     
+    # Outbound logging before sending (enhanced details)
+    try:
+        payload_json = json.dumps(payload, ensure_ascii=False)
+        payload_size = len(payload_json)
+        parsed = urlparse(config.GAPO_API_URL)
+        logger.info(
+            f"Sending to Gapo: receiver={chat_config.receiver_id} routing={routing_value} "
+            f"url={config.GAPO_API_URL} size={payload_size}B timeout={chat_config.timeout} "
+            f"x_request_id={x_request_id}"
+        )
+        logger.info(
+            f"Gapo request: method=POST scheme={parsed.scheme} host={parsed.hostname}:{parsed.port} path={parsed.path}"
+        )
+        logger.info(
+            f"Gapo headers: Content-Type={headers.get('Content-Type')} Accept={headers.get('Accept')} "
+            f"X-Request-ID={headers.get('X-Request-ID')} x-hub-signature={headers.get('x-hub-signature')}"
+        )
+        logger.info(
+            f"Gapo payload: collab_id={payload['collab_id']} bot_id={payload['bot_id']} "
+            f"receiver_id={payload['receiver_id']} body.type={payload['body']['type']} "
+            f"is_markdown={payload['body'].get('is_markdown_text')} text_len={len(payload['body'].get('text',''))}"
+        )
+        logger.info(f"Gapo payload_preview={payload_json[:800]}")
+    except Exception:
+        logger.debug("Failed to assemble outbound log details", exc_info=True)
+    
     try:
         response = http_pool.post(
             config.GAPO_API_URL,
@@ -665,6 +756,16 @@ def send_to_gapo_with_retry(message: str, chat_config: ChatConfig, routing_value
         )
         
         duration = time.time() - start_time
+        
+        # Detailed response logging
+        try:
+            logger.info(
+                f"Gapo response: status={response.status_code} reason={getattr(response,'reason','')} "
+                f"elapsed={duration:.2f}s url={getattr(response.request,'url','')}"
+            )
+            logger.info(f"Gapo response_body_preview={(response.text or '')[:800]}")
+        except Exception:
+            logger.debug("Failed to log Gapo response details", exc_info=True)
         
         if response.status_code == 200:
             logger.info(f"Message sent successfully to receiver {chat_config.receiver_id} in {duration:.2f}s")
@@ -678,7 +779,6 @@ def send_to_gapo_with_retry(message: str, chat_config: ChatConfig, routing_value
         logger.error(f"Failed to send to Gapo: {e}")
         metrics['messages_sent'].labels(routing_label=routing_value, status='failed').inc()
         raise
-
 # -----------------------------------------------------------------------------
 # 12. Message Formatting
 # -----------------------------------------------------------------------------
@@ -727,6 +827,31 @@ def before_request():
     """Set request context before processing"""
     g.request_id = request.headers.get('X-Request-ID', os.urandom(8).hex())
     g.start_time = time.time()
+    # Detailed incoming request logging
+    try:
+        remote_ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
+        method = request.method
+        path = request.path
+        query = request.query_string.decode('utf-8') if request.query_string else ''
+        ua = request.headers.get('User-Agent', '')
+        content_type = request.headers.get('Content-Type', '')
+        content_length = request.content_length or 0
+        has_auth = bool(request.headers.get('Authorization') or request.headers.get('X-Auth-Token') or request.args.get('token'))
+        body_preview = ''
+        alerts_count = None
+        if method in ('POST', 'PUT') and (content_type or '').startswith('application/json'):
+            body_json = request.get_json(silent=True)
+            if isinstance(body_json, dict):
+                alerts = body_json.get('alerts')
+                alerts_count = len(alerts) if isinstance(alerts, list) else None
+                try:
+                    body_preview = json.dumps({k: body_json.get(k) for k in ('status','receiver','groupKey','commonLabels')}, ensure_ascii=False)
+                except Exception:
+                    body_preview = ''
+        logger.info(f"Incoming request: ip={remote_ip} method={method} path={path} query=\"{query}\" ua=\"{ua}\" type={content_type} length={content_length} auth={'yes' if has_auth else 'no'} alerts_count={alerts_count} preview={body_preview}")
+    except Exception:
+        # Log but never block request
+        logger.debug("Failed to log request details", exc_info=True)
 
 @app.after_request
 def after_request(response):
@@ -771,7 +896,7 @@ def alertmanager_webhook():
         # Validate payload
         schema = AlertmanagerWebhookSchema()
         try:
-            data = schema.load(request.json)
+            data = schema.load(request.json, unknown=EXCLUDE)
         except ValidationError as e:
             logger.warning(f"Invalid payload: {e.messages}")
             return jsonify({"error": "Invalid payload", "details": e.messages}), 400
@@ -780,6 +905,24 @@ def alertmanager_webhook():
         alerts_by_routing = defaultdict(lambda: {'firing': [], 'resolved': []})
         
         for alert in data['alerts']:
+            # Optional detailed log per-alert
+            if config.LOG_ALERT_DETAILS:
+                al = alert
+                logger.info(
+                    "Alert detail: status=%s name=%s ns=%s svc=%s job=%s instance=%s sev=%s start=%s end=%s labels=%s annotations=%s",
+                    al.get('status'),
+                    al.get('labels', {}).get('alertname'),
+                    al.get('labels', {}).get('namespace'),
+                    al.get('labels', {}).get('service'),
+                    al.get('labels', {}).get('job'),
+                    al.get('labels', {}).get('instance'),
+                    al.get('labels', {}).get('severity'),
+                    al.get('startsAt'),
+                    al.get('endsAt'),
+                    json.dumps(al.get('labels', {}), ensure_ascii=False),
+                    json.dumps(al.get('annotations', {}), ensure_ascii=False)
+                )
+            
             # Check if should ignore
             should_ignore, reason = alert_filter.is_ignored(alert)
             
@@ -815,7 +958,8 @@ def alertmanager_webhook():
             queued = alert_queue.add({
                 'message': message,
                 'config': chat_config,
-                'routing_value': routing_value
+                'routing_value': routing_value,
+                'request_id': g.request_id
             })
             
             if queued:
@@ -936,9 +1080,15 @@ signal.signal(signal.SIGTERM, signal_handler)
 # -----------------------------------------------------------------------------
 # 17. Application Startup
 # -----------------------------------------------------------------------------
+_initialized = False
+
 def initialize_app():
     """Initialize application components"""
-    
+    global _initialized
+    if _initialized:
+        logger.debug("initialize_app() already executed; skipping re-initialization")
+        return
+
     logger.info("=" * 50)
     logger.info("Starting Enhanced Alert Routing System")
     logger.info(f"Routing by label: {config.ROUTING_LABEL}")
@@ -949,6 +1099,7 @@ def initialize_app():
     
     # Start worker threads
     alert_queue.start_workers(config.WORKER_THREADS)
+    _initialized = True
     
     # Test Gapo connectivity (optional)
     if os.getenv('TEST_GAPO_ON_STARTUP', 'false').lower() == 'true':

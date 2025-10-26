@@ -62,18 +62,20 @@ spec:
             - name: templates
               mountPath: /app/templates
               readOnly: true
+          {{- if .Values.probes.enabled }}
           readinessProbe:
             httpGet:
               path: /health
               port: {{ .Values.service.port }}
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            initialDelaySeconds: {{ default 5 .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ default 10 .Values.probes.readiness.periodSeconds }}
           livenessProbe:
             httpGet:
               path: /health
               port: {{ .Values.service.port }}
-            initialDelaySeconds: 15
-            periodSeconds: 20
+            initialDelaySeconds: {{ default 15 .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ default 20 .Values.probes.liveness.periodSeconds }}
+          {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}

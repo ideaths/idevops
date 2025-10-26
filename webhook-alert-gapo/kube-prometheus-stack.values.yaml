@@ -1,0 +1,26 @@
+# Minimal values to enable AlertmanagerConfig discovery
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    # Select AlertmanagerConfig CRs with label `alertmanager: main`
+    alertmanagerConfigSelector:
+      matchLabels:
+        alertmanager: main
+    # Allow configs from any namespace (our chart renders in `monitoring`)
+    alertmanagerConfigNamespaceSelector: {}
+    # Optional: ensure HA replicas
+    replicas: 2
+    # Optional global settings
+    config:
+      global:
+        resolve_timeout: 5m
+
+# Reduce footprint (optional tweaks; comment out if you want full stack)
+prometheusOperator:
+  enabled: true
+
+prometheus:
+  enabled: true
+
+grafana:
+  enabled: false
