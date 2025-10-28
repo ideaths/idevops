@@ -1,6 +1,6 @@
 image:
   repository: riseofkingdoms20211/webhook-alert-gapo
-  tag: 0.2.7-idle-log-throttle-guard
+  tag: 20251026-195558-tzdata
   pullPolicy: IfNotPresent
 
 service:
@@ -52,7 +52,7 @@ ConfigMap:
 
   # Routing
   ROUTING_LABEL: "namespace"
-  ALLOWED_VALUES: "monitoring"
+  ALLOWED_VALUES: "monitoring,kube-system"
 
   # Defaults for Gapo chat
   DEFAULT_COLLAB_ID: "7006773268721666048"
@@ -93,7 +93,7 @@ alertmanagerConfigs:
   bearer:
     enabled: true
     token: "supersecret"
-    systemRegex: ^(monitoring)$
+    systemRegex: ^(monitoring|kube-system)$
     groupBy: [alertname, namespace, job]
     groupWait: 30s
     groupInterval: 5m
@@ -101,6 +101,17 @@ alertmanagerConfigs:
   items:
     - name: monitoring
       namespace: monitoring
+      whitelist:
+        instances:
+          ipRegex: ".*"
+          hostRegex: ".*"
+        severities: [critical, warning]
+        jobs: []
+        alertnames: []
+      blacklist:
+        alertnames: [Watchdog, InfoInhibitor]
+    - name: kube-system
+      namespace: kube-system
       whitelist:
         instances:
           ipRegex: ".*"
