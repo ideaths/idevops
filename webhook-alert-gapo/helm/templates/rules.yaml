@@ -1,0 +1,257 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: k8s-critical-rules
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: kubernetes-critical.rules
+    rules:
+
+    # Control plane DOWN
+    - alert: KubeAPIServerDown
+      expr: sum by (job) (up{job="apiserver"} == 0) > 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: Kubernetes API server down
+        description: Có một hoặc nhiều apiserver bị down trong 2 phút.
+
+    # Removed for RKE2 + Cilium (no kube-proxy, controller/scheduler metrics may not be exposed)
+
+    # Etcd không có leader / endpoint DOWN
+    - alert: EtcdNoLeader
+      expr: max(etcd_server_has_leader) == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: Etcd has no leader
+        description: Không phát hiện leader của etcd trong 2 phút.
+
+    - alert: EtcdMembersDown
+      expr: sum by (job) (up{job="etcd"} == 0) > 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: Etcd members down
+        description: Có một hoặc nhiều thành viên etcd bị down trong 2 phút.
+
+    # Node readiness / kubelet
+    - alert: NodeNotReady
+      expr: max by (node) (kube_node_status_condition{condition="Ready",status="true"}) == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node not ready
+        description: 'Node {{ "{{" }} $labels.node {{ "}}" }} ở trạng thái NotReady trong 5 phút.'
+
+    - alert: KubeletDown
+      expr: up{job="kubelet"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Kubelet down
+        description: 'Kubelet của {{ "{{" }} $labels.instance {{ "}}" }} bị down trong 5 phút.'
+
+    # Node pressure (Disk/Memory)
+    - alert: NodeDiskPressure
+      expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node disk pressure
+        description: 'Node {{ "{{" }} $labels.node {{ "}}" }} đang bị áp lực đĩa (DiskPressure) trong 5 phút.'
+
+    - alert: NodeMemoryPressure
+      expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node memory pressure
+        description: 'Node {{ "{{" }} $labels.node {{ "}}" }} đang bị áp lực bộ nhớ (MemoryPressure) trong 5 phút.'
+
+    # Filesystem / volume
+    - alert: NodeFilesystemAlmostFull
+      expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|overlay"}) < 0.03
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node filesystem <3% free
+        description: 'Hệ thống tệp trên {{ "{{" }} $labels.instance {{ "}}" }} còn trống dưới 3%.'
+
+    - alert: NodeFilesystemReadOnly
+      expr: node_filesystem_readonly{fstype!~"tmpfs|fuse.lxcfs"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node filesystem read-only
+        description: 'Hệ thống tệp trên {{ "{{" }} $labels.instance {{ "}}" }} đang ở trạng thái chỉ đọc (read-only).'
+
+    - alert: PersistentVolumeCriticalFree
+      expr: (kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes) < 0.03
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: PVC nearly full (<3% free)
+        description: 'PVC {{ "{{" }} $labels.persistentvolumeclaim {{ "}}" }} trong {{ "{{" }} $labels.namespace {{ "}}" }} còn trống dưới 3%.'
+
+    # Pod CrashLoop / restart burst
+    - alert: KubePodCrashLooping
+      expr: max by (namespace, pod) (kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Pod crash looping
+        description: 'Pod {{ "{{" }} $labels.pod {{ "}}" }} trong {{ "{{" }} $labels.namespace {{ "}}" }} đang crash loop trong 5 phút.'
+
+    - alert: KubePodHighRestartRate
+      expr: sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total[5m])) > 5
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Pod high restart rate
+        description: 'Pod {{ "{{" }} $labels.pod {{ "}}" }} trong {{ "{{" }} $labels.namespace {{ "}}" }} đã khởi động lại >5 lần trong 5 phút.'
+
+    # Prometheus scraping sự cố (mất nhiều target)
+    - alert: ManyTargetsDown
+      expr: sum(up == 0) > 20
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Many scrape targets down
+        description: Có hơn 20 scrape target bị down trong 5 phút.
+
+    # Cluster resource health
+    - alert: NodeCPUHighUtilization
+      expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 90
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node CPU >90%
+        description: 'CPU của node {{ "{{" }} $labels.instance {{ "}}" }} vượt quá 90% trong 5 phút.'
+
+    - alert: NodeMemoryLowAvailable
+      expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node memory <10% available
+        description: 'Node {{ "{{" }} $labels.instance {{ "}}" }} còn dưới 10% bộ nhớ khả dụng trong 5 phút.'
+
+    - alert: NodeInodesAlmostFull
+      expr: (node_filesystem_files_free{fstype!~"tmpfs|fuse.lxcfs|overlay"} / node_filesystem_files{fstype!~"tmpfs|fuse.lxcfs|overlay"}) < 0.10
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node inodes <10% free
+        description: 'Inode của hệ thống tệp trên {{ "{{" }} $labels.instance {{ "}}" }} còn dưới 10%.'
+
+    - alert: NodeNetworkErrorsHigh
+      expr: sum by (instance, device) (rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m])) > 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Network interface errors high
+        description: 'Giao diện {{ "{{" }} $labels.device {{ "}}" }} trên {{ "{{" }} $labels.instance {{ "}}" }} có tỷ lệ lỗi cao trong 5 phút.'
+
+    # Pod resource health
+    - alert: PodCPUNearLimit
+      expr: (sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!="POD"}[5m])) / sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource="cpu"})) > 0.9 and sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource="cpu"}) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Pod CPU uses >90% of limit
+        description: 'Container {{ "{{" }} $labels.container {{ "}}" }} trong pod {{ "{{" }} $labels.pod {{ "}}" }} (ns {{ "{{" }} $labels.namespace {{ "}}" }}) sử dụng >90% giới hạn CPU trong 5 phút.'
+
+    - alert: PodMemoryNearLimit
+      expr: (sum by (namespace, pod, container) (container_memory_working_set_bytes{container!="POD"}) / sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"})) > 0.9 and sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"}) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Pod memory uses >90% of limit
+        description: 'Container {{ "{{" }} $labels.container {{ "}}" }} trong pod {{ "{{" }} $labels.pod {{ "}}" }} (ns {{ "{{" }} $labels.namespace {{ "}}" }}) sử dụng >90% giới hạn bộ nhớ trong 5 phút.'
+
+    - alert: PodCPUThrottlingHigh
+      expr: (sum by (namespace, pod, container) (rate(container_cpu_cfs_throttled_periods_total{container!="POD"}[5m])) / sum by (namespace, pod, container) (rate(container_cpu_cfs_periods_total{container!="POD"}[5m]))) > 0.5
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Pod CPU throttling >50%
+        description: 'Container {{ "{{" }} $labels.container {{ "}}" }} trong pod {{ "{{" }} $labels.pod {{ "}}" }} (ns {{ "{{" }} $labels.namespace {{ "}}" }}) bị throttling >50% số kỳ (periods) trong 5 phút.'
+
+    - alert: PodOOMKilled
+      expr: sum by (namespace, pod, container) (increase(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[5m])) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Pod was OOMKilled
+        description: 'Container {{ "{{" }} $labels.container {{ "}}" }} trong pod {{ "{{" }} $labels.pod {{ "}}" }} (ns {{ "{{" }} $labels.namespace {{ "}}" }}) vừa bị kill do OOM trong 5 phút gần đây.'
+
+    # Disk I/O health
+    - alert: DiskIOUtilHigh
+      expr: sum by (instance, device) (rate(node_disk_io_time_seconds_total[5m])) > 0.8
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Disk I/O utilization >80%
+        description: 'Thiết bị {{ "{{" }} $labels.device {{ "}}" }} trên {{ "{{" }} $labels.instance {{ "}}" }} có mức sử dụng I/O >80% trong 5 phút.'
+
+    - alert: DiskReadLatencyHigh
+      expr: (rate(node_disk_read_time_seconds_total[5m]) / rate(node_disk_reads_completed_total[5m])) > 0.05 and rate(node_disk_reads_completed_total[5m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Disk read latency >50ms
+        description: 'Thiết bị {{ "{{" }} $labels.device {{ "}}" }} trên {{ "{{" }} $labels.instance {{ "}}" }} có độ trễ đọc trung bình >50ms trong 5 phút.'
+
+    - alert: DiskWriteLatencyHigh
+      expr: (rate(node_disk_write_time_seconds_total[5m]) / rate(node_disk_writes_completed_total[5m])) > 0.05 and rate(node_disk_writes_completed_total[5m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Disk write latency >50ms
+        description: 'Thiết bị {{ "{{" }} $labels.device {{ "}}" }} trên {{ "{{" }} $labels.instance {{ "}}" }} có độ trễ ghi trung bình >50ms trong 5 phút.'
+
+    - alert: NodeIOWaitHigh
+      expr: avg by (instance) (rate(node_cpu_seconds_total{mode="iowait"}[5m])) > 0.2
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node I/O wait >20%
+        description: 'Node {{ "{{" }} $labels.instance {{ "}}" }} dành >20% thời gian CPU cho iowait trong 5 phút.'
+
+    - alert: DiskQueueSaturationHigh
+      expr: (rate(node_disk_io_time_weighted_seconds_total[5m]) / (rate(node_disk_io_time_seconds_total[5m]) + 1e-10)) > 2
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Disk queue saturation >2
+        description: 'Thiết bị {{ "{{" }} $labels.device {{ "}}" }} trên {{ "{{" }} $labels.instance {{ "}}" }} có độ dài hàng đợi trung bình >2 trong 5 phút.'

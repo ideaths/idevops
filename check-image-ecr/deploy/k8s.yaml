@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: digigold
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: check-image-ecr-sa
+  namespace: digigold
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::058264243496:role/check-image-ecr-irsa-role
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: check-image-ecr-role
+  namespace: digigold
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: check-image-ecr-rb
+  namespace: digigold
+subjects:
+  - kind: ServiceAccount
+    name: check-image-ecr-sa
+    namespace: digigold
+roleRef:
+  kind: Role
+  name: check-image-ecr-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: check-image-ecr
+  namespace: digigold
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: check-image-ecr
+  template:
+    metadata:
+      labels:
+        app: check-image-ecr
+    spec:
+      serviceAccountName: check-image-ecr-sa
+      containers:
+        - name: app
+          image: 058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/check-image-ecr:latest
+          imagePullPolicy: Always
+          env:
+            - name: CRON_SCHEDULE
+              value: "*/15 * * * *"
+            - name: LOG_DIR
+              value: "/app/logs"
+            - name: TARGET_NAMESPACE
+              value: "digigold"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: app-vol
+              mountPath: /app
+      volumes:
+        - name: app-vol
+          emptyDir: {}

@@ -15,16 +15,19 @@ templates:
   # Inline template content for alert_template.html; leave empty to use image default
   alert_template_html: |
     🔥 **{{ alert_name }}**
-    {% if summary %}📝 {{ summary }}{% endif %}
-    {% if description %}📄 {{ description }}{% endif %}
-    🏷️ {{ routing_label|title }}: {{ routing_value }}
-
-    {% set keys = ['namespace','service','job','instance','severity'] %}
-    {% for key, value in labels.items() %}
-    {% if key != routing_label and key in keys %}
-    🔖 {{ key|title }}: {{ value }}
-    {% endif %}
-    {% endfor %}
+    {%- if summary %}\n📝 {{ summary }}{%- endif %}
+    {%- if description %}\n📄 {{ description }}{%- endif %}
+    \n🏷️ {{ routing_label|title }}: {{ routing_value }}
+    \n🗂️ Tất cả labels:
+    {%- for key, value in labels.items()|sort %}
+    - {{ key }}: {{ value }}
+    {%- endfor %}
+    {%- if annotations %}
+    \n📝 Tất cả annotations:
+    {%- for key, value in annotations.items()|sort %}
+    - {{ key }}: {{ value }}
+    {%- endfor %}
+    {%- endif %}
 
 ConfigMap:
   # Logging
@@ -93,6 +96,13 @@ alertmanagerConfigs:
   bearer:
     enabled: true
     token: "supersecret"
+    # Dùng Secret có sẵn (ví dụ tạo bởi External Secrets/Vault)
+    # Nếu bật, chart sẽ THAM CHIẾU Secret ngoài thay vì tạo mới
+    useExistingSecret: false
+    # Tên Secret ngoài (trong namespace của từng item)
+    existingSecretName: ""
+    # Khoá trong Secret (mặc định là "token")
+    existingSecretKey: "token"
     systemRegex: ^(monitoring|kube-system)$
     groupBy: [alertname, namespace, job]
     groupWait: 30s
@@ -101,6 +111,11 @@ alertmanagerConfigs:
   items:
     - name: monitoring
       namespace: monitoring
+      # Tuỳ chọn: ghi đè ở mức item để dùng Secret ngoài riêng
+      # useExistingSecret: true
+      # bearerSecret:
+      #   name: webhook-alert-bearer
+      #   key: token
       whitelist:
         instances:
           ipRegex: ".*"
@@ -192,3 +207,15 @@ probes:
   liveness:
     initialDelaySeconds: 15
     periodSeconds: 20
+vaultStaticSecret:
+  enabled: true
+  vaultAuthRef: static-auth
+  name: webhook-alert-gapo-vault-static
+  connectionRef: operator/default
+  authMethodMount: kubernetes
+  role: kubernetes
+  serviceAccountName: ""
+  kv2Mount: dsop
+  kv2Path: grafana
+  destinationSecretName: webhook-alert-gapo-admin
+  refreshAfter: 30s

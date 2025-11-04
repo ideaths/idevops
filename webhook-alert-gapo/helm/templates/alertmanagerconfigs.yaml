@@ -2,7 +2,7 @@
 {{- $selectorLabel := default "alertmanager" .Values.alertmanagerConfigs.selectorLabel }}
 {{- $alertmanagerName := default "main" .Values.alertmanagerConfigs.alertmanagerName }}
 {{- $webhookURL := .Values.alertmanagerConfigs.webhookURL }}
-{{- $common := .Values.alertmanagerConfigs.common }}
+{{- $common := .Values.alertmanagerConfigs.bearer }}
 {{- $globalToken := default "" .Values.alertmanagerConfigs.bearer.token }}
 {{- $hasBeta := .Capabilities.APIVersions.Has "monitoring.coreos.com/v1beta1" }}
 {{- $hasAlpha := .Capabilities.APIVersions.Has "monitoring.coreos.com/v1alpha1" }}
@@ -106,7 +106,13 @@ spec:
           httpConfig:
             followRedirects: true
             {{- $itemToken := default $globalToken $item.bearerToken }}
-            {{- if ne (default "" $itemToken) "" }}
+            {{- $useExistingGlobal := default false $common.useExistingSecret }}
+            {{- $useExistingItem := default $useExistingGlobal $item.useExistingSecret }}
+            {{- if $useExistingItem }}
+            bearerTokenSecret:
+              name: {{ default $common.existingSecretName (default "" $item.bearerSecret.name) | default (printf "%s-am-bearer-%s" (include "webhook-alert-gapo.fullname" $) $item.name | trunc 63 | trimSuffix "-") }}
+              key: {{ default (default "token" $common.existingSecretKey) (default "" $item.bearerSecret.key) | default "token" }}
+            {{- else if ne (default "" $itemToken) "" }}
             bearerTokenSecret:
               name: {{ printf "%s-am-bearer-%s" (include "webhook-alert-gapo.fullname" $) $item.name | trunc 63 | trimSuffix "-" }}
               key: token

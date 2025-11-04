@@ -1,0 +1,16 @@
+{{- $hasVault := .Capabilities.APIVersions.Has "secrets.hashicorp.com/v1beta1" }}
+{{- if and $hasVault .Values.vaultStaticSecret (default false .Values.vaultStaticSecret.enabled) }}
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: {{ default "static-auth" .Values.vaultStaticSecret.vaultAuthRef }}
+spec:
+  vaultConnectionRef: {{ .Values.vaultStaticSecret.connectionRef }}
+  method: kubernetes
+  mount: {{ .Values.vaultStaticSecret.authMethodMount }}
+  kubernetes:
+    role: {{ .Values.vaultStaticSecret.role }}
+    serviceAccount: {{ default (ternary (include "webhook-alert-gapo.fullname" .) "default" .Values.serviceAccount.create) .Values.vaultStaticSecret.serviceAccountName }}
+    audiences:
+      - vault
+{{- end }}

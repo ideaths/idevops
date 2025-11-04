@@ -1,0 +1,18 @@
+# Auto-generated config from ECR repository list
+# Format: <deployment>:<image_uri>:sha256:<digest>
+# Region=ap-southeast-1 Registry=058264243496
+
+aws-digigold-auth:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/aws-digigold-auth:latest:sha256:NONE
+aws-digigold-esb:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/aws-digigold-esb:latest:sha256:NONE
+cluster-autoscaler:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/cluster-autoscaler:latest:sha256:NONE
+digigold-api:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-api:latest:sha256:NONE
+digigold-auto:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-auto:latest:sha256:NONE
+digigold-cache:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-cache:latest:sha256:NONE
+digigold-fe:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-fe:latest:sha256:NONE
+digigold-gw:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-gw:latest:sha256:NONE
+digigold-mesh:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-mesh:latest:sha256:NONE
+digigold-trace:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-trace:latest:sha256:NONE
+digigold-web:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/digigold-web:latest:sha256:NONE
+metric-server:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/metric-server:latest:sha256:NONE
+test:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/test:latest:sha256:NONE
+velero:058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/velero:latest:sha256:NONE

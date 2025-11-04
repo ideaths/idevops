@@ -610,14 +610,19 @@ class TemplateManager:
         )
         self.fallback_template = """
 🔥 **{{ alert_name }}**
-{% if summary %}📝 {{ summary }}{% endif %}
-{% if description %}📄 {{ description }}{% endif %}
-🏷️ {{ routing_label|title }}: {{ routing_value }}
-{% for key, value in labels.items() %}
-{% if key != routing_label and key in ['namespace', 'job', 'instance', 'service'] %}
-🔖 {{ key|title }}: {{ value }}
-{% endif %}
-{% endfor %}
+{%- if summary %}\n📝 {{ summary }}{%- endif %}
+{%- if description %}\n📄 {{ description }}{%- endif %}
+\n🏷️ {{ routing_label|title }}: {{ routing_value }}
+\n🗂️ Tất cả labels:
+{%- for key, value in labels.items()|sort %}
+- {{ key }}: {{ value }}
+{%- endfor %}
+{%- if annotations %}
+\n📝 Tất cả annotations:
+{%- for key, value in annotations.items()|sort %}
+- {{ key }}: {{ value }}
+{%- endfor %}
+{%- endif %}
 """
     
     @lru_cache(maxsize=10)
@@ -638,6 +643,7 @@ class TemplateManager:
             summary=alert.get('annotations', {}).get('summary', ''),
             description=alert.get('annotations', {}).get('description', ''),
             labels=alert.get('labels', {}),
+            annotations=alert.get('annotations', {}),
             routing_label=routing_label,
             routing_value=routing_value
         )

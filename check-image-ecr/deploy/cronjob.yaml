@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: check-image-ecr-cron
+  namespace: digigold
+spec:
+  schedule: "*/15 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: check-image-ecr-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: check
+              image: 058264243496.dkr.ecr.ap-southeast-1.amazonaws.com/check-image-ecr:latest
+              imagePullPolicy: Always
+              env:
+                - name: RUN_MODE
+                  value: "once"
+                - name: CONFIG_PATH
+                  value: "/app/config.txt"
+              volumeMounts:
+                - name: app-vol
+                  mountPath: /app
+          volumes:
+            - name: app-vol
+              emptyDir: {}
