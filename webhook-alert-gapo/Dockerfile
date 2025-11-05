@@ -7,7 +7,7 @@ RUN apk add --no-cache ca-certificates curl
 WORKDIR /src
 COPY . /src/
 RUN pip install --no-cache-dir -U pip setuptools wheel pyarmor \
-    && pyarmor gen -O /src-obf -r /src/app.py /src/wsgi.py
+    && pyarmor gen -O /src-obf -r /src/webhook_alert_gapo /src/wsgi.py
 
 # Common runtime base
 FROM python:3.11-alpine AS runtime-base
@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -U pip setuptools wheel \
     && pip install --no-cache-dir -r /app/requirements.txt
 COPY gunicorn.conf.py /app/gunicorn.conf.py
 COPY templates /app/templates
+COPY webhook_alert_gapo /app/webhook_alert_gapo
 USER appuser
 EXPOSE 5051
 CMD ["gunicorn", "-c", "gunicorn.conf.py", "wsgi:application"]
@@ -30,5 +31,5 @@ COPY --from=obfuscator /src-obf/ /app/
 
 # Stage 2b: Runtime without obfuscation (plain sources)
 FROM runtime-base AS runtime-plain
-COPY app.py /app/app.py
+COPY webhook_alert_gapo /app/webhook_alert_gapo
 COPY wsgi.py /app/wsgi.py

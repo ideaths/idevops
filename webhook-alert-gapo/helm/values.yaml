@@ -62,6 +62,7 @@ ConfigMap:
   DEFAULT_BOT_ID: "5847077221700892984"
   DEFAULT_RECEIVER_ID: "1074278932"
 
+  ROUTING_CONFIG: '{"efast":{"collab_id":1,"bot_id":1,"receiver_id":"U123"}, "ipay":{"collab_id":2,"bot_id":2,"receiver_id":"U456"}}'
   # Gapo send
   GAPO_API_URL: "http://10.6.131.11:8082/webhooktest4pt/chatbot/alert-bot"
 

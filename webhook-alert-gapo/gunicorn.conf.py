@@ -18,7 +18,7 @@ preload_app = True
 def post_worker_init(worker):
     # Optionally, initialize app components per worker, if needed
     try:
-        from app import initialize_app
+        from webhook_alert_gapo import initialize_app
         initialize_app()
     except Exception as e:
         # Gunicorn will log the exception; avoid crash

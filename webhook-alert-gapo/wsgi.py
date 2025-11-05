@@ -1,6 +1,12 @@
 import os
 
-from app import app
+from webhook_alert_gapo import create_app, initialize_app
 
-# Expose the Flask app for Gunicorn
-application = app
+# Create the Flask app for Gunicorn
+application = create_app()
+
+# Optionally initialize workers
+try:
+    initialize_app()
+except Exception:
+    pass
